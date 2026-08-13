@@ -2,7 +2,7 @@ export type IconName =
   | "activity" | "arrow" | "back" | "cases" | "check" | "chevron" | "chevron-right"
   | "close" | "code" | "connections" | "database" | "external" | "folder" | "github"
   | "home" | "menu" | "mic" | "more" | "pause" | "play" | "report" | "search"
-  | "settings" | "spark" | "terminal" | "timeline" | "volume";
+  | "settings" | "spark" | "terminal" | "timeline" | "volume" | "attachment" | "team";
 
 const paths: Record<IconName, React.ReactNode> = {
   activity: <path d="M3 12h3l2.2-5 3.5 10 2.5-6H21" />,
@@ -32,6 +32,8 @@ const paths: Record<IconName, React.ReactNode> = {
   terminal: <path d="m5 7 4 4-4 4M11 16h8" />,
   timeline: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   volume: <><path d="M5 10v4h3l4 4V6l-4 4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></>,
+  attachment: <path d="m8 12.5 6.3-6.3a3 3 0 0 1 4.2 4.2l-8.1 8.1a5 5 0 0 1-7.1-7.1l8-8M7 15l7.8-7.8" />,
+  team: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19v-2a4.5 4.5 0 0 1 9 0v2M15 5.5a3 3 0 0 1 0 5.8M15 14a4.5 4.5 0 0 1 5.5 4.4V19" /></>,
 };
 
 export function Icon({ name, size = 18, className }: { name: IconName; size?: number; className?: string }) {

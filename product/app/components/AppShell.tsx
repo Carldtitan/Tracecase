@@ -13,6 +13,7 @@ const navItems = [
   { label: "Runs", icon: "activity", href: "/app/runs" },
   { label: "Repositories", icon: "folder", href: "/app/repositories" },
   { label: "Connections", icon: "connections", href: "/app/connections" },
+  { label: "Team", icon: "team", href: "/app/team" },
   { label: "Settings", icon: "settings", href: "/app/settings" },
 ] as const;
 

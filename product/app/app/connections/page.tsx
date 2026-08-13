@@ -1,16 +1,20 @@
 import { PageHeader, StatusPill } from "../../components/DashboardParts";
 import { Icon, type IconName } from "../../components/Icon";
+import { getDefaultScope } from "@/lib/tracecase/config";
+import { getRuntime } from "@/lib/tracecase/service";
 
 export const metadata = { title: "Connections" };
 
-const connections: Array<{ name: string; detail: string; icon: IconName; ready: boolean; href: string; action: string }> = [
-  { name: "MongoDB Atlas", detail: "Cases, runs, repo memory", icon: "database", ready: Boolean(process.env.MONGODB_URI), href: "https://cloud.mongodb.com/", action: "Open Atlas" },
-  { name: "GitHub App", detail: "Repositories and draft PRs", icon: "github", ready: Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_SLUG), href: "https://github.com/settings/apps", action: "GitHub settings" },
-  { name: "Fireworks", detail: "Reasoning and vision", icon: "spark", ready: Boolean(process.env.FIREWORKS_API_KEY), href: "https://app.fireworks.ai/", action: "Open Fireworks" },
-  { name: "Daytona", detail: "Isolated browser workers", icon: "terminal", ready: Boolean(process.env.DAYTONA_API_KEY), href: "https://app.daytona.io/", action: "Open Daytona" },
-];
-
-export default function ConnectionsPage() {
+export default async function ConnectionsPage() {
+  const { store } = await getRuntime();
+  const project = await store.getProject(getDefaultScope());
+  const connections: Array<{ name: string; detail: string; icon: IconName; ready: boolean; href: string; action: string }> = [
+    { name: "MongoDB Atlas", detail: "Cases, runs, repo memory", icon: "database", ready: Boolean(process.env.MONGODB_URI && project), href: "https://cloud.mongodb.com/", action: "Open Atlas" },
+    { name: "GitHub App", detail: "Repositories and draft PRs", icon: "github", ready: Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_SLUG && project?.repository?.installationId), href: "https://github.com/settings/apps", action: "GitHub settings" },
+    { name: "Fireworks", detail: "Reasoning and vision", icon: "spark", ready: Boolean(process.env.FIREWORKS_API_KEY && process.env.FIREWORKS_MODEL), href: "https://app.fireworks.ai/", action: "Open Fireworks" },
+    { name: "Daytona", detail: "Isolated browser workers", icon: "terminal", ready: Boolean(process.env.DAYTONA_API_KEY && process.env.DAYTONA_API_URL), href: "https://app.daytona.io/", action: "Open Daytona" },
+    { name: "BrowserStack", detail: "Windows, macOS, Android, iOS", icon: "activity", ready: process.env.REAL_DEVICE_PROVIDER === "browserstack" && Boolean(process.env.BROWSERSTACK_USERNAME && process.env.BROWSERSTACK_ACCESS_KEY), href: "https://automate.browserstack.com/", action: "Open Automate" },
+  ];
   return (
     <main className="dashboard-page">
       <PageHeader eyebrow="Connections" title="Stack" />

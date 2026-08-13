@@ -1,19 +1,24 @@
 import Link from "next/link";
 import { PageHeader, StatusPill } from "../components/DashboardParts";
 import { Icon } from "../components/Icon";
+import { getDefaultScope } from "@/lib/tracecase/config";
+import { getRuntime } from "@/lib/tracecase/service";
+import { liveExecutionConfigured } from "@/lib/tracecase/execution";
 
-const systems = [
-  { name: "MongoDB", icon: "database" as const, ready: Boolean(process.env.MONGODB_URI) },
-  { name: "GitHub", icon: "github" as const, ready: Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_SLUG) },
-  { name: "Fireworks", icon: "spark" as const, ready: Boolean(process.env.FIREWORKS_API_KEY && process.env.FIREWORKS_MODEL) },
-  { name: "Daytona", icon: "terminal" as const, ready: Boolean(process.env.DAYTONA_API_KEY) },
-];
-
-export default function OverviewPage() {
+export default async function OverviewPage() {
+  const { store } = await getRuntime();
+  const project = await store.getProject(getDefaultScope());
+  const systems = [
+    { name: "MongoDB", icon: "database" as const, ready: Boolean(process.env.MONGODB_URI && project) },
+    { name: "GitHub", icon: "github" as const, ready: Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_SLUG && project?.repository?.installationId) },
+    { name: "Fireworks", icon: "spark" as const, ready: Boolean(process.env.FIREWORKS_API_KEY && process.env.FIREWORKS_MODEL) },
+    { name: "Daytona", icon: "terminal" as const, ready: Boolean(process.env.DAYTONA_API_KEY && process.env.DAYTONA_API_URL) },
+  ];
   const readyCount = systems.filter((system) => system.ready).length;
+  const readyForReports = readyCount === systems.length && Boolean(project?.repository?.installationId) && liveExecutionConfigured();
   return (
     <main className="dashboard-page">
-      <PageHeader eyebrow="Overview" title={readyCount === systems.length ? "Ready for reports" : "Connect your stack"} action={<Link className="button secondary" href="/app/connections">Connections</Link>} />
+      <PageHeader eyebrow="Overview" title={readyForReports ? "Ready for reports" : "Connect your stack"} action={<Link className="button secondary" href="/app/connections">Connections</Link>} />
       <section className="setup-hero">
         <div className="setup-copy">
           <span className="setup-count">{readyCount}<small>/4</small></span>
