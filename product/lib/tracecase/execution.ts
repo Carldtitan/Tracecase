@@ -134,6 +134,14 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       target: process.env.DAYTONA_TARGET,
       requestTimeoutMs: 120_000,
     });
+    if (run.execution?.provider === "daytona" && ["failed", "cancelled"].includes(run.status)) {
+      try {
+        const previousSandbox = await daytona.get(run.execution.sandboxId);
+        await daytona.delete(previousSandbox, 60, true);
+      } catch (error) {
+        console.warn("Tracecase could not remove the previous Daytona coordinator before retrying.", { name: error instanceof Error ? error.name : "UnknownError" });
+      }
+    }
     const secretSuffix = sha256(`${run.id}:${leaseOwner}`).slice(0, 16);
     const daytonaSecrets: Array<{ id: string; name: string }> = [];
     pendingSecretCleanup = { daytona, ids: [] };

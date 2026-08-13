@@ -18,7 +18,7 @@ const configSchema = z.object({
   autoDispatchRuns: booleanString,
   targetAllowedDomains: z.array(z.string().min(1)).max(40).default([]),
   privateSelectors: z.array(z.string().min(1)).max(30).default(["input[type=password]", "[data-private]", "[data-tracecase-mask]"]),
-  daytonaOrchestratorImage: z.string().default("node:22-bookworm-slim"),
+  daytonaOrchestratorImage: z.string().default("node:22-bookworm"),
   daytonaBrowserImage: z.string().default("mcr.microsoft.com/playwright:v1.55.0-noble"),
   playwrightVersion: z.string().regex(/^\d+\.\d+\.\d+$/).default("1.55.0"),
 });
