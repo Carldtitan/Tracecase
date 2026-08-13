@@ -24,6 +24,15 @@ export const tenantScopeSchema = z.object({
 });
 export type TenantScope = z.infer<typeof tenantScopeSchema>;
 
+export const organizationSchema = z.object({
+  id: idSchema,
+  name: z.string().min(1).max(120),
+  slug: z.string().regex(/^[a-z0-9-]+$/),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema,
+});
+export type Organization = z.infer<typeof organizationSchema>;
+
 export const userSchema = z.object({
   id: idSchema,
   organizationId: idSchema,
@@ -33,6 +42,21 @@ export const userSchema = z.object({
   createdAt: isoDateSchema,
 });
 export type User = z.infer<typeof userSchema>;
+
+export const invitationSchema = z.object({
+  id: idSchema,
+  organizationId: idSchema,
+  projectId: idSchema,
+  email: z.string().email(),
+  role: roleSchema,
+  tokenHash: z.string().length(64),
+  invitedBy: idSchema,
+  status: z.enum(["pending", "accepted", "revoked", "expired"]),
+  expiresAt: isoDateSchema,
+  createdAt: isoDateSchema,
+  acceptedAt: isoDateSchema.optional(),
+});
+export type Invitation = z.infer<typeof invitationSchema>;
 
 const connectionSchema = z.object({
   provider: z.enum(["github", "otel", "sentry", "jira", "daytona", "fireworks"]),
@@ -63,8 +87,8 @@ export const projectSchema = z.object({
   policy: z.object({
     allowBranchPush: z.boolean(),
     allowDraftPullRequest: z.boolean(),
-    allowMerge: z.literal(false),
-    allowDeploy: z.literal(false),
+    allowMerge: z.boolean(),
+    allowDeploy: z.boolean(),
     maxRunMinutes: z.number().int().min(1).max(60),
     maxParallelWorkers: z.number().int().min(1).max(24),
     requireHumanForProductionAccess: z.boolean(),
@@ -83,7 +107,7 @@ export type Project = z.infer<typeof projectSchema>;
 export const environmentSchema = z.object({
   browser: z.enum(["chromium", "firefox", "webkit"]),
   browserVersion: z.string().max(64).optional(),
-  operatingSystem: z.enum(["linux", "windows", "macos", "ios"]),
+  operatingSystem: z.enum(["linux", "windows", "macos", "android", "ios"]),
   deviceProfile: z.enum(["desktop", "iphone", "android"]).default("desktop"),
   viewport: z.object({ width: z.number().int().min(240).max(7680), height: z.number().int().min(240).max(4320) }),
   locale: z.string().max(32),
@@ -94,6 +118,9 @@ export const environmentSchema = z.object({
   stateProfile: z.enum(["anonymous", "new-user", "returning-user", "stale-session"]),
   featureFlags: z.record(z.string().max(100), z.boolean()).refine((flags) => Object.keys(flags).length <= 20, "At most 20 feature flags are allowed"),
   source: z.enum(["reported", "inferred", "seeded"]),
+  executionProvider: z.enum(["daytona", "browserstack"]).optional(),
+  realDevice: z.boolean().optional(),
+  deviceModel: z.string().max(120).optional(),
 });
 export type Environment = z.infer<typeof environmentSchema>;
 
@@ -114,6 +141,7 @@ export const reportSchema = z.object({
   consent: z.object({ technicalDetails: z.boolean(), screenshot: z.boolean(), attachments: z.boolean() }),
   unknowns: z.array(z.string().max(300)).max(20),
   attachmentIds: z.array(idSchema).max(10),
+  clarifications: z.array(z.object({ question: z.string().max(500), answer: z.string().max(2000) })).max(10).optional(),
   receivedAt: isoDateSchema,
 });
 export type Report = z.infer<typeof reportSchema>;
@@ -181,6 +209,8 @@ export const workerResultSchema = z.object({
   artifactIds: z.array(idSchema).max(100),
   error: z.string().max(2000).optional(),
   durationMs: z.number().int().nonnegative(),
+  providerSessionId: z.string().max(300).optional(),
+  providerSessionUrl: z.string().url().optional(),
 });
 export type WorkerResult = z.infer<typeof workerResultSchema>;
 
@@ -228,7 +258,17 @@ export const runSchema = z.object({
   workerResults: z.array(workerResultSchema).max(24),
   outcome: z.object({ reproduced: z.boolean(), summary: z.string().max(2000), testedScope: z.array(z.string().max(500)).max(50), uncertainty: z.array(z.string().max(500)).max(40) }).optional(),
   patch: patchSchema.optional(),
-  review: z.object({ provider: z.literal("github"), branch: z.string(), draftPullRequestUrl: z.string().url().optional(), idempotencyKey: z.string(), preparedOnly: z.boolean() }).optional(),
+  review: z.object({
+    provider: z.literal("github"),
+    branch: z.string(),
+    pullRequestNumber: z.number().int().positive().optional(),
+    draftPullRequestUrl: z.string().url().optional(),
+    idempotencyKey: z.string(),
+    preparedOnly: z.boolean(),
+    mergedAt: isoDateSchema.optional(),
+    deploymentTriggeredAt: isoDateSchema.optional(),
+    deploymentUrl: z.string().url().optional(),
+  }).optional(),
   execution: z.object({ provider: z.literal("daytona"), sandboxId: z.string().max(200), dispatchedAt: isoDateSchema, lastHeartbeatAt: isoDateSchema.optional(), lastError: z.string().max(2000).optional() }).optional(),
   budget: z.object({ maxMinutes: z.number().int(), maxWorkers: z.number().int(), workersUsed: z.number().int(), cancelled: z.boolean() }),
   modelBundle: z.object({ provider: z.string(), model: z.string(), promptVersion: z.string(), codeVersion: z.string() }),
@@ -243,7 +283,7 @@ export const runEventSchema = z.object({
   projectId: idSchema,
   runId: idSchema,
   sequence: z.number().int().positive(),
-  type: z.enum(["run.created", "run.dispatched", "agent.started", "agent.completed", "worker.started", "worker.completed", "evidence.saved", "checkpoint.saved", "run.completed", "run.failed", "review.prepared", "review.created", "review.failed"]),
+  type: z.enum(["run.created", "run.dispatched", "agent.started", "agent.completed", "worker.started", "worker.completed", "evidence.saved", "checkpoint.saved", "run.completed", "run.failed", "review.prepared", "review.created", "review.failed", "review.merged", "deployment.triggered", "deployment.failed"]),
   agent: z.enum(["intake", "supervisor", "planner", "browser", "reproduction", "fix", "review", "system"]),
   summary: z.string().max(1000),
   data: z.record(z.string(), z.unknown()),
@@ -302,15 +342,34 @@ export const artifactSchema = z.object({
   organizationId: idSchema,
   projectId: idSchema,
   runId: idSchema.optional(),
-  kind: z.enum(["screenshot", "video", "console", "network", "trace", "attachment", "evidence-bundle"]),
+  sessionId: idSchema.optional(),
+  workerId: idSchema.optional(),
+  kind: z.enum(["screenshot", "live-frame", "video", "console", "network", "trace", "attachment", "evidence-bundle"]),
   storagePath: z.string().max(2048),
   sha256: z.string().length(64),
   bytes: z.number().int().nonnegative(),
-  redacted: z.literal(true),
+  mimeType: z.string().max(120).optional(),
+  originalName: z.string().max(255).optional(),
+  redacted: z.boolean(),
   expiresAt: isoDateSchema,
   createdAt: isoDateSchema,
+  updatedAt: isoDateSchema.optional(),
 });
 export type Artifact = z.infer<typeof artifactSchema>;
+
+export const intakeDraftSchema = z.object({
+  id: idSchema,
+  organizationId: idSchema,
+  projectId: idSchema,
+  sessionId: idSchema,
+  projectKeyHash: z.string().length(64),
+  payload: z.record(z.string(), z.unknown()),
+  dueAt: isoDateSchema,
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema,
+  submittedAt: isoDateSchema.optional(),
+});
+export type IntakeDraft = z.infer<typeof intakeDraftSchema>;
 
 export const intakePayloadSchema = z.object({
   projectKey: z.string().min(3).max(200),
@@ -323,5 +382,7 @@ export const intakePayloadSchema = z.object({
   environment: environmentSchema.partial().optional(),
   consent: z.object({ technicalDetails: z.boolean(), screenshot: z.boolean(), attachments: z.boolean() }),
   unknowns: z.array(z.string().max(300)).max(20).default([]),
+  attachmentIds: z.array(idSchema).max(10).default([]),
+  clarifications: z.array(z.object({ question: z.string().max(500), answer: z.string().max(2000) })).max(10).default([]),
 });
 export type IntakePayload = z.infer<typeof intakePayloadSchema>;

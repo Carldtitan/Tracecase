@@ -41,10 +41,6 @@ export async function retrieveRepositoryContext(input: {
     if (chunks.length > 0) return { route: "exact", chunks, queryPlan: { find: { ...input.scope, identifiers: input.identifiers, commit: input.commit } } };
   }
 
-  if (!input.mongoCollection) {
-    return { route: "none", chunks: [], queryPlan: { reason: "semantic retrieval requires an Atlas Vector Search collection" } };
-  }
-
   const filter = {
     organizationId: input.scope.organizationId,
     projectId: input.scope.projectId,
@@ -56,7 +52,10 @@ export async function retrieveRepositoryContext(input: {
     { $vectorSearch: { index: "repo_knowledge_auto", path: "content", query: input.semanticQuery, model: "voyage-code-3", numCandidates: 100, limit: 5, filter } },
     { $project: { embedding: 0, score: { $meta: "vectorSearchScore" } } },
   ];
-  const chunks = await input.mongoCollection.aggregate<RepositoryChunk>(pipeline).toArray();
+  const chunks = input.mongoCollection
+    ? await input.mongoCollection.aggregate<RepositoryChunk>(pipeline).toArray()
+    : await input.store.findRepositoryChunksSemantic(input.scope, input.semanticQuery, { repository: input.repository, commit: input.commit });
+  if (chunks.length === 0) return { route: "none", chunks: [], queryPlan: pipeline };
   return { route: "semantic", chunks, queryPlan: pipeline };
 }
 
