@@ -98,7 +98,7 @@ function Reporter() {
     if (!sessionToken) return;
     setThinking(true);
     try {
-      const response = await fetch("/api/widget/questions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(currentPayload(next)) });
+      const response = await fetch("/api/widget/questions", { method: "POST", signal: AbortSignal.timeout(15_000), headers: { "content-type": "application/json" }, body: JSON.stringify(currentPayload(next)) });
       if (!response.ok) throw new Error("questions unavailable");
       const result = await response.json() as { questions: Question[] };
       const question = result.questions[0];
