@@ -57,8 +57,41 @@ async function cleanupSecrets() {
   for (const secretId of [...(job.daytonaSecretIds ?? [])].reverse()) await daytona.secret.delete(secretId).catch(() => undefined);
 }
 
+function fireworksFallback(name) {
+  modelUnavailable = true;
+  if (name === "tracecase_investigation_plan") {
+    const isDomainSdr = new URL(job.targetUrl).hostname.toLowerCase().includes("domainsdr");
+    return {
+      hypotheses: ["The reported action may fail only under a specific browser, device, or session state."],
+      filesToRead: [],
+      searchTerms: ["Start Agent", "campaign", "submit"],
+      browserPlan: isDomainSdr ? {
+        startPath: "/",
+        actions: [
+          { kind: "goto", selector: null, value: null },
+          { kind: "fill", selector: "input[name='domain']", value: "tracecase-demo.com" },
+          { kind: "fill", selector: "input[name='owner_email']", value: "demo@example.com" },
+          { kind: "fill", selector: "input[name='owner_name']", value: "Tracecase" },
+          { kind: "fill", selector: "input[name='ask_price']", value: "1500" },
+          { kind: "fill", selector: "input[name='floor_price']", value: "500" },
+          { kind: "click", selector: "form button[type='submit']", value: null },
+          { kind: "wait", selector: null, value: "2500" },
+        ],
+        assertions: [{ id: "campaign-opened", kind: "application-state", description: "Submitting the form opens the new campaign", expected: "/campaign/", selector: null, operator: "url_contains" }],
+      } : {
+        startPath: job.report.route || "/",
+        actions: [{ kind: "goto", selector: null, value: null }, { kind: "wait", selector: null, value: "1500" }],
+        assertions: [{ id: "page-loaded", kind: "dom", description: "The target application renders", expected: "visible", selector: "body", operator: "visible" }],
+      },
+    };
+  }
+  if (name === "tracecase_visual_evidence") return { summary: "Screenshots were captured; model vision was unavailable.", findings: [] };
+}
+
 async function fireworks(messages, name, schema) {
-  const response = await fetch(`${process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1"}/chat/completions`, {
+  let response;
+  try {
+    response = await fetch(`${process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1"}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.FIREWORKS_API_KEY}`, "content-type": "application/json" },
     signal: AbortSignal.timeout(20_000),
@@ -69,36 +102,15 @@ async function fireworks(messages, name, schema) {
       response_format: { type: "json_schema", json_schema: { name, schema } },
       messages,
     }),
-  });
+    });
+  } catch (error) {
+    const fallback = fireworksFallback(name);
+    if (fallback) return fallback;
+    throw new Error(`Fireworks request failed: ${redact(error instanceof Error ? error.message : error, 500)}`);
+  }
   if (!response.ok) {
-    modelUnavailable = true;
-    if (name === "tracecase_investigation_plan") {
-      const isDomainSdr = new URL(job.targetUrl).hostname.toLowerCase().includes("domainsdr");
-      return {
-        hypotheses: ["The reported action may fail only under a specific browser, device, or session state."],
-        filesToRead: [],
-        searchTerms: ["Start Agent", "campaign", "submit"],
-        browserPlan: isDomainSdr ? {
-          startPath: "/",
-          actions: [
-            { kind: "goto", selector: null, value: null },
-            { kind: "fill", selector: "input[name='domain']", value: "tracecase-demo.com" },
-            { kind: "fill", selector: "input[name='owner_email']", value: "demo@example.com" },
-            { kind: "fill", selector: "input[name='owner_name']", value: "Tracecase" },
-            { kind: "fill", selector: "input[name='ask_price']", value: "1500" },
-            { kind: "fill", selector: "input[name='floor_price']", value: "500" },
-            { kind: "click", selector: "form button[type='submit']", value: null },
-            { kind: "wait", selector: null, value: "2500" },
-          ],
-          assertions: [{ id: "campaign-opened", kind: "application-state", description: "Submitting the form opens the new campaign", expected: "/campaign/", selector: null, operator: "url_contains" }],
-        } : {
-          startPath: job.report.route || "/",
-          actions: [{ kind: "goto", selector: null, value: null }, { kind: "wait", selector: null, value: "1500" }],
-          assertions: [{ id: "page-loaded", kind: "dom", description: "The target application renders", expected: "visible", selector: "body", operator: "visible" }],
-        },
-      };
-    }
-    if (name === "tracecase_visual_evidence") return { summary: "Screenshots were captured; model vision was unavailable.", findings: [] };
+    const fallback = fireworksFallback(name);
+    if (fallback) return fallback;
     throw new Error(`Fireworks returned ${response.status}: ${redact(await response.text(), 1000)}`);
   }
   const payload = await response.json();
