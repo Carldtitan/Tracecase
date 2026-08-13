@@ -68,7 +68,7 @@ async function install() {
 async function waitForUrl(url, timeoutMs = 60_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    try { const response = await fetch(url); if (response.status < 500) return true; } catch {}
+    try { const response = await fetch(url); if (response.status < 500) return true; } catch { /* The local server is still starting. */ }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 750));
   }
   return false;
@@ -80,6 +80,10 @@ async function verifyBrowser(url, plan, environment) {
   try {
     const context = await browser.newContext({ viewport: environment.viewport, locale: environment.locale, timezoneId: environment.timezone, colorScheme: environment.colorScheme, reducedMotion: environment.reducedMotion ? "reduce" : "no-preference" });
     const page = await context.newPage();
+    const consoleEntries = [];
+    const networkEntries = [];
+    page.on("console", (message) => consoleEntries.push(clean(message.text(), 1000)));
+    page.on("response", (response) => networkEntries.push({ url: response.url(), status: response.status() }));
     for (const action of plan.actions) {
       if (action.kind === "goto") await page.goto(action.value ? new URL(action.value, url).toString() : new URL(plan.startPath || "/", url).toString());
       if (action.kind === "click") await page.locator(action.selector).first().click();
@@ -96,6 +100,8 @@ async function verifyBrowser(url, plan, environment) {
       if (assertion.operator === "text_contains") passed = (locator ? await locator.textContent().catch(() => "") : await page.locator("body").innerText().catch(() => "")).toLowerCase().includes(assertion.expected.toLowerCase());
       if (assertion.operator === "url_contains") passed = page.url().includes(assertion.expected);
       if (assertion.operator === "value_equals") passed = Boolean(locator && await locator.inputValue().catch(() => "") === assertion.expected);
+      if (assertion.operator === "console_contains") passed = consoleEntries.join("\n").toLowerCase().includes(assertion.expected.toLowerCase());
+      if (assertion.operator === "request_succeeded") passed = networkEntries.some((entry) => entry.url.includes(assertion.expected) && entry.status >= 200 && entry.status < 400);
       results.push(passed);
     }
     await context.close();
@@ -155,7 +161,7 @@ try {
   result.error = clean(error instanceof Error ? error.message : error);
 } finally {
   if (server?.pid) {
-    try { process.kill(-server.pid, "SIGTERM"); } catch {}
+    try { process.kill(-server.pid, "SIGTERM"); } catch { /* The bounded server already stopped. */ }
   }
   await writeFile(outputPath, JSON.stringify(result));
 }

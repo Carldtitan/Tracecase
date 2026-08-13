@@ -80,7 +80,7 @@ export class GitHubAdapter extends JsonIntegration {
     const signer = createSign("RSA-SHA256");
     signer.update(unsigned);
     const jwt = `${unsigned}.${signer.sign(Buffer.from(encodedKey!, "base64").toString("utf8"), "base64url")}`;
-    const response = await fetch(`https://api.github.com/app/installations/${encodeURIComponent(installationId)}/access_tokens`, { method: "POST", headers: { authorization: `Bearer ${jwt}`, accept: "application/vnd.github+json", "x-github-api-version": "2026-03-10" } });
+    const response = await fetch(`https://api.github.com/app/installations/${encodeURIComponent(installationId)}/access_tokens`, { method: "POST", headers: { authorization: `Bearer ${jwt}`, accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" } });
     if (!response.ok) throw new Error(`GitHub installation token returned ${response.status}`);
     const payload = await response.json() as { token?: string };
     if (!payload.token) throw new Error("GitHub installation token missing");
@@ -115,27 +115,45 @@ export class GitHubAdapter extends JsonIntegration {
     title: string;
     body: string;
     files: Array<{ path: string; content: string }>;
-  }): Promise<{ url: string; branch: string; commitSha: string }> {
+    draft?: boolean;
+  }): Promise<{ url: string; branch: string; commitSha: string; pullRequestNumber: number }> {
     const token = await this.installationToken(input.installationId);
     const root = `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}`;
-    const existing = await this.github<Array<{ html_url: string; head: { sha: string } }>>(token, `${root}/pulls?state=all&head=${encodeURIComponent(`${input.owner}:${input.branch}`)}&per_page=1`);
-    if (existing[0]) return { url: existing[0].html_url, branch: input.branch, commitSha: existing[0].head.sha };
+    const existing = await this.github<Array<{ number: number; html_url: string; head: { sha: string } }>>(token, `${root}/pulls?state=all&head=${encodeURIComponent(`${input.owner}:${input.branch}`)}&per_page=1`);
+    if (existing[0]) return { url: existing[0].html_url, branch: input.branch, commitSha: existing[0].head.sha, pullRequestNumber: existing[0].number };
+
+    const branchPath = input.branch.split("/").map(encodeURIComponent).join("/");
+    const existingBranchResponse = await fetch(`${root}/git/ref/heads/${branchPath}`, { headers: this.headers(token) });
+    if (existingBranchResponse.ok) {
+      const existingBranch = await existingBranchResponse.json() as { object: { sha: string } };
+      const pull = await this.github<{ number: number; html_url: string }>(token, `${root}/pulls`, { method: "POST", body: JSON.stringify({ title: input.title, body: input.body, head: input.branch, base: input.baseBranch, draft: input.draft ?? true }) });
+      return { url: pull.html_url, branch: input.branch, commitSha: existingBranch.object.sha, pullRequestNumber: pull.number };
+    }
+    if (existingBranchResponse.status !== 404) throw new Error(`GitHub branch lookup returned ${existingBranchResponse.status}`);
 
     const baseCommit = await this.github<{ tree: { sha: string } }>(token, `${root}/git/commits/${encodeURIComponent(input.baseSha)}`);
+    const baseTree = await this.github<{ tree: Array<{ path: string; mode: string; type: string }> }>(token, `${root}/git/trees/${baseCommit.tree.sha}?recursive=1`);
+    const modes = new Map(baseTree.tree.filter((entry) => entry.type === "blob").map((entry) => [entry.path, entry.mode]));
     const blobs = await Promise.all(input.files.map(async (file) => {
       const blob = await this.github<{ sha: string }>(token, `${root}/git/blobs`, { method: "POST", body: JSON.stringify({ content: file.content, encoding: "utf-8" }) });
-      return { path: file.path, mode: "100644", type: "blob", sha: blob.sha };
+      return { path: file.path, mode: modes.get(file.path) ?? "100644", type: "blob", sha: blob.sha };
     }));
     const tree = await this.github<{ sha: string }>(token, `${root}/git/trees`, { method: "POST", body: JSON.stringify({ base_tree: baseCommit.tree.sha, tree: blobs }) });
     const commit = await this.github<{ sha: string }>(token, `${root}/git/commits`, { method: "POST", body: JSON.stringify({ message: input.title, tree: tree.sha, parents: [input.baseSha] }) });
     const refResponse = await fetch(`${root}/git/refs`, { method: "POST", headers: this.headers(token, true), body: JSON.stringify({ ref: `refs/heads/${input.branch}`, sha: commit.sha }) });
     if (!refResponse.ok && refResponse.status !== 422) throw new Error(`GitHub branch creation returned ${refResponse.status}`);
     if (refResponse.status === 422) {
-      const current = await this.github<{ object: { sha: string } }>(token, `${root}/git/ref/heads/${input.branch.split("/").map(encodeURIComponent).join("/")}`);
+      const current = await this.github<{ object: { sha: string } }>(token, `${root}/git/ref/heads/${branchPath}`);
       if (current.object.sha !== commit.sha) throw new Error("The Tracecase branch already exists with different content; refusing to overwrite it");
     }
-    const pull = await this.github<{ html_url: string }>(token, `${root}/pulls`, { method: "POST", body: JSON.stringify({ title: input.title, body: input.body, head: input.branch, base: input.baseBranch, draft: true }) });
-    return { url: pull.html_url, branch: input.branch, commitSha: commit.sha };
+    const pull = await this.github<{ number: number; html_url: string }>(token, `${root}/pulls`, { method: "POST", body: JSON.stringify({ title: input.title, body: input.body, head: input.branch, base: input.baseBranch, draft: input.draft ?? true }) });
+    return { url: pull.html_url, branch: input.branch, commitSha: commit.sha, pullRequestNumber: pull.number };
+  }
+
+  async mergePullRequest(input: { owner: string; repo: string; installationId: string; pullRequestNumber: number; expectedHeadSha: string }) {
+    const token = await this.installationToken(input.installationId);
+    const root = `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}`;
+    return this.github<{ merged: boolean; message: string; sha: string }>(token, `${root}/pulls/${input.pullRequestNumber}/merge`, { method: "PUT", body: JSON.stringify({ sha: input.expectedHeadSha, merge_method: "squash" }) });
   }
 
   async createBranch(input: { owner: string; repo: string; branch: string; baseSha: string; installationId: string }) {
@@ -153,8 +171,6 @@ export class GitHubAdapter extends JsonIntegration {
     return this.request("GitHub", `https://api.github.com/repos/${input.owner}/${input.repo}/pulls`, { method: "POST", headers: { authorization: `Bearer ${token}`, accept: "application/vnd.github+json", "content-type": "application/json" }, body: JSON.stringify({ title: input.title, body: input.body, head: input.branch, base: input.base, draft: true }) }, [["GitHub installation token", token]]);
   }
 
-  merge(): never { throw new Error("Tracecase V1 has no merge capability"); }
-  deploy(): never { throw new Error("Tracecase V1 has no deploy capability"); }
 }
 
 export class SentryAdapter extends JsonIntegration {

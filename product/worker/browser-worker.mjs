@@ -9,6 +9,7 @@ const consoleEntries = [];
 const networkEntries = [];
 const actionTrace = [];
 const artifacts = [];
+let frameSequence = 0;
 
 function redact(value) {
   return String(value)
@@ -32,6 +33,18 @@ function startUrl() {
   return new URL(path, url).toString();
 }
 
+async function postFrame(page) {
+  if (!input.frameCallbackUrl || !input.frameToken || frameSequence >= 30) return;
+  try {
+    const mask = input.privateSelectors.map((selector) => page.locator(selector));
+    const frame = await page.screenshot({ type: "jpeg", quality: 42, fullPage: false, mask, animations: "disabled" });
+    frameSequence += 1;
+    await fetch(input.frameCallbackUrl, { method: "POST", headers: { authorization: `Bearer ${input.frameToken}`, "content-type": "image/jpeg", "x-tracecase-worker": input.workerId, "x-tracecase-frame": String(frameSequence) }, body: frame });
+  } catch {
+    // Frame delivery must never change the test result.
+  }
+}
+
 const browserTypes = { chromium, firefox, webkit };
 const browser = await browserTypes[input.environment.browser].launch({ headless: true });
 let context;
@@ -51,10 +64,8 @@ try {
         ? "Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 Chrome/131.0 Mobile Safari/537.36"
         : undefined,
     offline: input.environment.networkProfile === "offline",
-    recordVideo: { dir: "/workspace/tracecase/video", size: input.environment.viewport },
   });
   const page = await context.newPage();
-  const video = page.video();
   page.setDefaultTimeout(Math.min(10_000, input.maxDurationMs));
   page.setDefaultNavigationTimeout(Math.min(20_000, input.maxDurationMs));
   page.on("console", (message) => consoleEntries.push({ level: message.type(), text: redact(message.text()), timestamp: new Date().toISOString() }));
@@ -75,6 +86,7 @@ try {
     if (action.kind === "press") await page.locator(action.selector ?? "body").first().press(action.value ?? "Enter");
     if (action.kind === "wait") await page.waitForTimeout(Math.min(5_000, Math.max(0, Number(action.value ?? 250))));
     actionTrace.push({ index, kind: action.kind, selector: action.selector, elapsedMs: Date.now() - actionStarted, url: redact(page.url()) });
+    await postFrame(page);
   }
 
   const assertions = [];
@@ -114,13 +126,6 @@ try {
   const screenshot = await page.screenshot({ type: "jpeg", quality: 55, fullPage: false, mask, animations: "disabled" });
   artifacts.push({ workerId: input.workerId, kind: "screenshot", mimeType: "image/jpeg", contentBase64: screenshot.toString("base64") });
   await context.close();
-  if (video) {
-    const videoPath = await video.path().catch(() => undefined);
-    if (videoPath) {
-      const bytes = await readFile(videoPath).catch(() => undefined);
-      if (bytes && bytes.byteLength <= 1_500_000) artifacts.push({ workerId: input.workerId, kind: "video", mimeType: "video/webm", contentBase64: bytes.toString("base64") });
-    }
-  }
   const status = assertions.every((assertion) => assertion.passed) ? "passed" : "failed";
   await writeFile(outputPath, JSON.stringify({ result: { workerId: input.workerId, environment: input.environment, status, assertions, console: consoleEntries.slice(0, 500), network: networkEntries.slice(0, 1000), artifactIds: [], durationMs: Date.now() - started }, artifacts, actionTrace }));
 } catch (error) {
@@ -129,4 +134,3 @@ try {
 } finally {
   await browser.close();
 }
-

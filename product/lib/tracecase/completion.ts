@@ -1,7 +1,7 @@
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import type { Artifact, InvestigationRun, Project, RunEvent, TenantScope } from "./contracts";
 import { GitHubAdapter } from "./integrations";
-import { buildDraftPullRequestBody } from "./operations";
+import { buildDraftPullRequestBody } from "./review";
 import type { RemoteCallback } from "./remote-contracts";
 import { filterRepositoryContent, redactText, redactUnknown, sha256 } from "./security";
 import type { TracecaseStore } from "./store";
@@ -33,7 +33,11 @@ const CompletionState = Annotation.Root({
   reviewError: Annotation<string | undefined>(),
 });
 
-type CompletionDependencies = { store: TracecaseStore; github?: GitHubAdapter };
+type ReviewPublisher = {
+  createDraftPullRequestFromFiles: (input: Parameters<GitHubAdapter["createDraftPullRequestFromFiles"]>[0]) => Promise<{ url: string; branch: string; commitSha: string; pullRequestNumber?: number }>;
+  mergePullRequest?: GitHubAdapter["mergePullRequest"];
+};
+type CompletionDependencies = { store: TracecaseStore; github?: ReviewPublisher };
 
 export async function processRemoteCompletion(dependencies: CompletionDependencies, scope: TenantScope, payload: Extract<RemoteCallback, { kind: "completed" }>): Promise<InvestigationRun> {
   const [run, project] = await Promise.all([dependencies.store.getRun(scope, payload.runId), dependencies.store.getProject(scope)]);
@@ -56,6 +60,7 @@ export async function processRemoteCompletion(dependencies: CompletionDependenci
         storagePath: `mongodb-artifact://${id}`,
         sha256: sha256(content),
         bytes: content.byteLength,
+        mimeType: item.mimeType,
         redacted: true,
         expiresAt: new Date(Date.now() + state.project.retention.artifactsDays * 86_400_000).toISOString(),
         createdAt: payload.timestamp,
@@ -96,6 +101,7 @@ export async function processRemoteCompletion(dependencies: CompletionDependenci
       state.payload.patch.regression.patchPassed &&
       state.payload.patch.regression.comparableEnvironment &&
       state.payload.patch.relevantTestsPassed &&
+      state.payload.patch.applicationRecheckPassed === true &&
       state.payload.filesToCommit.length > 0 &&
       state.payload.filesToCommit.length <= 20 &&
       state.payload.filesToCommit.every((file) => patchPaths.has(file.path) && contentByPath.has(file.path) && !filterRepositoryContent(file.path, file.content).ignored),
@@ -139,10 +145,35 @@ export async function processRemoteCompletion(dependencies: CompletionDependenci
         title: `Fix: ${caseDocument.title}`.slice(0, 240),
         body,
         files: state.payload.filesToCommit,
+        draft: !state.project.policy.allowMerge,
       });
-      const updated = { ...state.run, review: { provider: "github" as const, branch: result.branch, draftPullRequestUrl: result.url, idempotencyKey, preparedOnly: false }, updatedAt: new Date().toISOString() };
-      await dependencies.store.appendRunEvent(runEvent(updated, 6100, "review.created", "review", "A tested draft pull request was opened.", { branch: result.branch, url: result.url, commitSha: result.commitSha }));
+      let updated: InvestigationRun = { ...state.run, review: { provider: "github" as const, branch: result.branch, ...(result.pullRequestNumber ? { pullRequestNumber: result.pullRequestNumber } : {}), draftPullRequestUrl: result.url, idempotencyKey, preparedOnly: false }, updatedAt: new Date().toISOString() };
+      await dependencies.store.appendRunEvent(runEvent(updated, 6100, "review.created", "review", state.project.policy.allowMerge ? "A tested pull request was opened." : "A tested draft pull request was opened.", { branch: result.branch, url: result.url, commitSha: result.commitSha }));
       await dependencies.store.appendAuditEvent({ id: `audit_pr_${state.run.id}`, organizationId: state.run.organizationId, projectId: state.run.projectId, actorId: "tracecase-agent", action: "github.draft_pr.create", target: result.url, result: "changed", details: { runId: state.run.id, branch: result.branch, commitSha: result.commitSha }, timestamp: updated.updatedAt });
+      if (state.project.policy.allowMerge) {
+        if (!result.pullRequestNumber || !github.mergePullRequest) throw new Error("The GitHub publisher cannot merge this pull request");
+        const merge = await github.mergePullRequest({ owner: repository.owner, repo: repository.name, installationId: repository.installationId, pullRequestNumber: result.pullRequestNumber, expectedHeadSha: result.commitSha });
+        if (!merge.merged) throw new Error(`GitHub did not merge the verified pull request: ${merge.message}`);
+        const mergedAt = new Date().toISOString();
+        updated = { ...updated, review: { ...updated.review!, mergedAt }, updatedAt: mergedAt };
+        await dependencies.store.appendRunEvent(runEvent(updated, 6120, "review.merged", "review", "The verified pull request was merged.", { pullRequestNumber: result.pullRequestNumber, mergeSha: merge.sha }));
+        await dependencies.store.appendAuditEvent({ id: `audit_merge_${state.run.id}`, organizationId: state.run.organizationId, projectId: state.run.projectId, actorId: "tracecase-agent", action: "github.pull_request.merge", target: result.url, result: "changed", details: { runId: state.run.id, pullRequestNumber: result.pullRequestNumber, mergeSha: merge.sha }, timestamp: mergedAt });
+        if (state.project.policy.allowDeploy) {
+          try {
+            const hook = process.env.VERCEL_DEPLOY_HOOK_URL;
+            if (!hook) throw new Error("Automatic deploy is enabled, but VERCEL_DEPLOY_HOOK_URL is missing");
+            const deployResponse = await fetch(hook, { method: "POST" });
+            if (!deployResponse.ok) throw new Error(`Deployment hook returned ${deployResponse.status}`);
+            const deploy = await deployResponse.json().catch(() => ({})) as { job?: { id?: string; state?: string }; url?: string };
+            const deploymentTriggeredAt = new Date().toISOString();
+            updated = { ...updated, review: { ...updated.review!, deploymentTriggeredAt, ...(deploy.url ? { deploymentUrl: deploy.url } : {}) }, updatedAt: deploymentTriggeredAt };
+            await dependencies.store.appendRunEvent(runEvent(updated, 6130, "deployment.triggered", "review", "Deployment was triggered after merge.", { jobId: deploy.job?.id, state: deploy.job?.state, url: deploy.url }));
+          } catch (error) {
+            const message = redactText(error instanceof Error ? error.message : "Unknown deployment error");
+            await dependencies.store.appendRunEvent(runEvent(updated, 6131, "deployment.failed", "review", "The pull request merged, but deployment could not be triggered.", { error: message }));
+          }
+        }
+      }
       return { run: updated };
     } catch (error) {
       const message = redactText(error instanceof Error ? error.message : "Unknown GitHub error");
@@ -175,4 +206,3 @@ export async function processRemoteCompletion(dependencies: CompletionDependenci
   const result = await graph.invoke({ payload, run, project, filesSafe: false, artifactIdsByWorker: {} });
   return result.run;
 }
-

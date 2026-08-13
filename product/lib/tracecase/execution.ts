@@ -1,13 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Daytona } from "@daytona/sdk";
+import { Daytona, type Sandbox } from "@daytona/sdk";
 import { getConfig } from "./config";
-import type { InvestigationRun, Project, RunEvent, TenantScope } from "./contracts";
+import type { InvestigationRun, RunEvent, TenantScope } from "./contracts";
 import { GitHubAdapter } from "./integrations";
-import { planEnvironments } from "./planner";
+import { classifyContext, planEnvironments } from "./planner";
+import { retrieveRepositoryContext } from "./retrieval";
 import type { RemoteJob } from "./remote-contracts";
 import { remoteJobSchema } from "./remote-contracts";
-import { createOpaqueId, redactText } from "./security";
+import { createOpaqueId, redactText, sha256 } from "./security";
 import { getRuntime } from "./service";
 
 function event(run: InvestigationRun, values: Pick<RunEvent, "sequence" | "type" | "agent" | "summary"> & { data?: Record<string, unknown> }): RunEvent {
@@ -60,6 +61,8 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
   if (!acquired) return { dispatched: false, reason: "dispatch_already_in_progress" };
 
   let run: InvestigationRun | null = null;
+  let pendingSecretCleanup: { daytona: Daytona; ids: string[] } | undefined;
+  let pendingSandboxCleanup: { daytona: Daytona; sandbox: Sandbox } | undefined;
   try {
     run = await store.getRun(scope, runId);
     if (!run) throw new Error("Run not found");
@@ -73,10 +76,27 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
     if (!project.repository?.installationId) throw new Error("Install the GitHub App on the selected repository before dispatching a run");
     if (!config.appUrl || !config.workerSigningSecret) throw new Error("NEXT_PUBLIC_APP_URL and WORKER_SIGNING_SECRET are required");
 
-    const environments = planEnvironments(run.contextClass, report, Math.min(run.budget.maxWorkers, project.policy.maxParallelWorkers));
+    const classification = classifyContext({ sessionReplay: false, exactEnvironment: Boolean(report.environment.browser && report.environment.operatingSystem), exactRelease: Boolean(report.release), authenticatedState: Boolean(report.reporter.externalUserId), telemetry: report.consent.technicalDetails, repository: true });
+    const realEnvironmentsConfigured = process.env.REAL_DEVICE_PROVIDER === "browserstack" && Boolean(process.env.BROWSERSTACK_USERNAME && process.env.BROWSERSTACK_ACCESS_KEY);
+    const environments = planEnvironments(classification.contextClass, report, Math.min(run.budget.maxWorkers, project.policy.maxParallelWorkers), { realEnvironments: realEnvironmentsConfigured });
+    const memory = await retrieveRepositoryContext({ store, scope, identifiers: report.exactIdentifiers, semanticQuery: `${report.expected}\n${report.observed}`, repository: `${project.repository.owner}/${project.repository.name}` });
+    const reporterAttachments: Array<{ id: string; mimeType: "image/jpeg" | "image/png" | "image/webp"; contentBase64: string }> = [];
+    let reporterAttachmentCharacters = 0;
+    for (const id of report.attachmentIds) {
+      const artifact = await store.getArtifact(scope, id);
+      if (!artifact?.mimeType || !["image/jpeg", "image/png", "image/webp"].includes(artifact.mimeType)) continue;
+      const content = await store.getArtifactContent(scope, id);
+      if (!content) continue;
+      const contentBase64 = Buffer.from(content).toString("base64");
+      if (reporterAttachmentCharacters + contentBase64.length > 2_500_000) continue;
+      reporterAttachments.push({ id, mimeType: artifact.mimeType as "image/jpeg" | "image/png" | "image/webp", contentBase64 });
+      reporterAttachmentCharacters += contentBase64.length;
+      if (reporterAttachments.length >= 5) break;
+    }
     const targetAllowedDomains = configuredDomains(project.targetTestUrl, config.targetAllowedDomains);
     const callbackUrl = new URL("/api/internal/runs/callback", config.appUrl).toString();
-    const job: RemoteJob = remoteJobSchema.parse({
+    const frameCallbackUrl = new URL("/api/internal/runs/frame", config.appUrl).toString();
+    const jobBase = {
       version: 1,
       runId: run.id,
       organizationId: run.organizationId,
@@ -97,11 +117,14 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       targetAllowedDomains,
       privateSelectors: config.privateSelectors,
       environments,
+      reporterAttachments,
+      memoryContext: memory.chunks.slice(0, 10),
       budget: { maxMinutes: run.budget.maxMinutes, maxWorkers: run.budget.maxWorkers },
       callbackUrl,
+      frameCallbackUrl,
       browserImage: config.daytonaBrowserImage,
       playwrightVersion: config.playwrightVersion,
-    });
+    };
 
     const github = new GitHubAdapter();
     const installationToken = await github.installationToken(project.repository.installationId);
@@ -111,13 +134,30 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       target: process.env.DAYTONA_TARGET,
       requestTimeoutMs: 120_000,
     });
+    const secretSuffix = sha256(`${run.id}:${leaseOwner}`).slice(0, 16);
+    const daytonaSecrets: Array<{ id: string; name: string }> = [];
+    pendingSecretCleanup = { daytona, ids: [] };
+    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_daytona_${secretSuffix}`, value: process.env.DAYTONA_API_KEY!, hosts: ["*.daytona.io"] }));
+    pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
+    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_fireworks_${secretSuffix}`, value: process.env.FIREWORKS_API_KEY!, hosts: [new URL(process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1").hostname] }));
+    pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
+    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_github_${secretSuffix}`, value: `Bearer ${installationToken}`, hosts: ["*.daytona.io", "github.com", "api.github.com"] }));
+    pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
+    if (realEnvironmentsConfigured) {
+      const authorization = `Basic ${Buffer.from(`${process.env.BROWSERSTACK_USERNAME}:${process.env.BROWSERSTACK_ACCESS_KEY}`).toString("base64")}`;
+      daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_browserstack_${secretSuffix}`, value: authorization, hosts: ["hub.browserstack.com", "api.browserstack.com"] }));
+      pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
+    }
+    const job: RemoteJob = remoteJobSchema.parse({ ...jobBase, daytonaSecretIds: daytonaSecrets.map((item) => item.id) });
     const coordinatorDomains = [
-      "api.fireworks.ai",
+      new URL(process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1").hostname,
       "github.com",
       "api.github.com",
       "objects.githubusercontent.com",
       "registry.npmjs.org",
+      ...(realEnvironmentsConfigured ? ["hub.browserstack.com", "api.browserstack.com", "automate.browserstack.com"] : []),
       "*.daytona.io",
+      new URL(process.env.DAYTONA_API_URL ?? "https://app.daytona.io/api").hostname,
       new URL(callbackUrl).hostname,
       ...targetAllowedDomains,
     ];
@@ -127,20 +167,36 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       name: `tracecase-${run.id.replace(/[^a-z0-9-]/gi, "-").slice(-40)}`,
       labels: { product: "tracecase", runId: run.id, role: "coordinator" },
       envVars: {
-        DAYTONA_API_KEY: process.env.DAYTONA_API_KEY!,
         DAYTONA_API_URL: process.env.DAYTONA_API_URL ?? "https://app.daytona.io/api",
         DAYTONA_TARGET: process.env.DAYTONA_TARGET ?? "us",
-        FIREWORKS_API_KEY: process.env.FIREWORKS_API_KEY!,
         FIREWORKS_BASE_URL: process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1",
         FIREWORKS_MODEL: process.env.FIREWORKS_MODEL!,
-        GITHUB_CLONE_TOKEN: installationToken,
         WORKER_SIGNING_SECRET: config.workerSigningSecret,
+      },
+      secrets: {
+        DAYTONA_API_KEY: daytonaSecrets[0].name,
+        FIREWORKS_API_KEY: daytonaSecrets[1].name,
+        GITHUB_AUTHORIZATION: daytonaSecrets[2].name,
+        ...(realEnvironmentsConfigured ? { BROWSERSTACK_AUTHORIZATION: daytonaSecrets[3].name } : {}),
       },
       domainAllowList: [...new Set(coordinatorDomains)].join(","),
       autoStopInterval: 0,
       autoDeleteInterval: Math.min(120, run.budget.maxMinutes + 20),
       ttlMinutes: Math.min(120, run.budget.maxMinutes + 25),
     }, { timeout: 120 });
+    pendingSandboxCleanup = { daytona, sandbox };
+
+    const dispatchedAt = new Date().toISOString();
+    run = {
+      ...run,
+      status: "dispatching",
+      contextClass: classification.contextClass,
+      contextReasons: classification.reasons,
+      environments,
+      execution: { provider: "daytona", sandboxId: sandbox.id, dispatchedAt, lastHeartbeatAt: dispatchedAt },
+      updatedAt: dispatchedAt,
+    };
+    await store.putRun(run);
 
     await sandbox.fs.createFolder("/workspace/tracecase", "700");
     await Promise.all([
@@ -160,6 +216,7 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       false,
       50,
     );
+    await sandbox.git.remoteAdd("/workspace/repo", "origin", `https://github.com/${project.repository.owner}/${project.repository.name}.git`, false, true);
     await sandbox.process.createSession("tracecase-agent");
     const launched = await sandbox.process.executeSessionCommand("tracecase-agent", {
       command: "chmod 700 /workspace/tracecase/remote-entry.sh && /workspace/tracecase/remote-entry.sh",
@@ -167,19 +224,13 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       suppressInputEcho: true,
     }, 30);
     if (!launched.cmdId) throw new Error("Daytona did not return a background command ID");
-
-    const dispatchedAt = new Date().toISOString();
-    run = {
-      ...run,
-      status: "dispatching",
-      environments,
-      execution: { provider: "daytona", sandboxId: sandbox.id, dispatchedAt, lastHeartbeatAt: dispatchedAt },
-      updatedAt: dispatchedAt,
-    };
-    await store.putRun(run);
+    pendingSecretCleanup = undefined;
+    pendingSandboxCleanup = undefined;
     await store.appendRunEvent(event(run, { sequence: 1200, type: "run.dispatched", agent: "system", summary: "The investigation was dispatched to an isolated Daytona coordinator.", data: { provider: "daytona", sandboxId: sandbox.id, workerCount: environments.length } }));
     return { dispatched: true, sandboxId: sandbox.id };
   } catch (error) {
+    if (pendingSecretCleanup) await Promise.all(pendingSecretCleanup.ids.map((id) => pendingSecretCleanup!.daytona.secret.delete(id).catch(() => undefined)));
+    if (pendingSandboxCleanup) await pendingSandboxCleanup.daytona.delete(pendingSandboxCleanup.sandbox, 60, false).catch(() => undefined);
     const message = redactText(error instanceof Error ? error.message : "Unknown dispatch error");
     if (run) {
       const failed = { ...run, status: "failed" as const, execution: run.execution ? { ...run.execution, lastError: message } : undefined, updatedAt: new Date().toISOString() };
@@ -191,4 +242,3 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
     await store.releaseLease(scope, leaseKey, leaseOwner);
   }
 }
-

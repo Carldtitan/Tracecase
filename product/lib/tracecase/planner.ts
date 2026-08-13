@@ -39,13 +39,15 @@ const base = {
   deviceProfile: "desktop" as const,
 };
 
-export function planEnvironments(contextClass: "A" | "B" | "C", report: Report, maxWorkers: number): Environment[] {
+export function planEnvironments(contextClass: "A" | "B" | "C", report: Report, maxWorkers: number, options: { realEnvironments?: boolean } = {}): Environment[] {
   const reported = report.environment;
   if (contextClass === "A" && reported.browser && reported.operatingSystem && reported.viewport) {
+    const genuine = options.realEnvironments && reported.operatingSystem !== "linux";
     return [{
       ...base,
       browser: reported.browser,
-      operatingSystem: reported.operatingSystem,
+      operatingSystem: genuine ? reported.operatingSystem : "linux",
+      deviceProfile: reported.operatingSystem === "ios" ? "iphone" : base.deviceProfile,
       viewport: reported.viewport,
       locale: reported.locale ?? base.locale,
       timezone: reported.timezone ?? base.timezone,
@@ -53,12 +55,22 @@ export function planEnvironments(contextClass: "A" | "B" | "C", report: Report, 
       reducedMotion: reported.reducedMotion ?? false,
       networkProfile: reported.networkProfile ?? base.networkProfile,
       stateProfile: reported.stateProfile ?? "returning-user",
-      source: "reported",
+      source: reported.operatingSystem === "linux" ? "reported" : "inferred",
+      executionProvider: genuine ? "browserstack" : "daytona",
+      realDevice: genuine,
     }];
   }
 
+  const realCandidates: Environment[] = options.realEnvironments ? [
+    { ...base, browser: "chromium", operatingSystem: "windows", reducedMotion: false, stateProfile: "returning-user", executionProvider: "browserstack", realDevice: true, deviceModel: "Windows 11 · Chrome" },
+    { ...base, browser: "webkit", operatingSystem: "macos", reducedMotion: false, stateProfile: "returning-user", executionProvider: "browserstack", realDevice: true, deviceModel: "macOS Sequoia · Safari" },
+    { ...base, browser: "chromium", operatingSystem: "windows", reducedMotion: true, stateProfile: "new-user", executionProvider: "browserstack", realDevice: true, deviceModel: "Windows 11 · Edge" },
+    { ...base, browser: "chromium", operatingSystem: "android", deviceProfile: "android", viewport: { width: 412, height: 915 }, reducedMotion: false, stateProfile: "stale-session", executionProvider: "browserstack", realDevice: true, deviceModel: "Google Pixel 7 Pro" },
+    { ...base, browser: "webkit", operatingSystem: "ios", deviceProfile: "iphone", viewport: { width: 393, height: 852 }, reducedMotion: true, stateProfile: "returning-user", executionProvider: "browserstack", realDevice: true, deviceModel: "iPhone 16 Pro" },
+  ] : [];
   const candidates: Environment[] = [
-    { ...base, browser: "chromium", operatingSystem: "linux", reducedMotion: false, stateProfile: "returning-user" },
+    ...realCandidates,
+    { ...base, browser: "chromium", operatingSystem: "linux", reducedMotion: false, stateProfile: "returning-user", executionProvider: "daytona", realDevice: false },
     { ...base, browser: "chromium", operatingSystem: "linux", reducedMotion: true, stateProfile: "returning-user" },
     { ...base, browser: "firefox", operatingSystem: "linux", reducedMotion: false, stateProfile: "returning-user" },
     { ...base, browser: "webkit", operatingSystem: "linux", reducedMotion: false, stateProfile: "returning-user" },
@@ -70,7 +82,7 @@ export function planEnvironments(contextClass: "A" | "B" | "C", report: Report, 
     { ...base, browser: "webkit", operatingSystem: "linux", reducedMotion: true, stateProfile: "stale-session" },
   ];
 
-  const requested = contextClass === "B" ? Math.min(4, maxWorkers) : Math.min(8, maxWorkers);
+  const requested = contextClass === "B" ? Math.min(options.realEnvironments ? 5 : 4, maxWorkers) : Math.min(options.realEnvironments ? 10 : 8, maxWorkers);
   return candidates.slice(0, requested);
 }
 

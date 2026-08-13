@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "test": "npm run test:unit && npm run typecheck && npm run build",
-    "test:unit": "node --import tsx --test tests/domain.test.ts tests/store.test.ts tests/orchestration.test.ts",
+    "test:unit": "node --import tsx --test tests/domain.test.ts tests/store.test.ts tests/orchestration.test.ts tests/completion.test.ts tests/production-features.test.ts",
     "test:apple-webkit": "node --import tsx --test tests/apple-webkit.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
@@ -19,13 +19,18 @@
     "project:bootstrap": "tsx scripts/bootstrap-project.ts",
     "repo:index-local": "tsx scripts/index-local.ts",
     "worker:run": "tsx scripts/worker-run.ts",
-    "connections:check": "tsx scripts/check-connections.ts"
+    "connections:check": "tsx scripts/check-connections.ts",
+    "env:provision": "node scripts/provision-env.mjs",
+    "env:sync-vercel": "node scripts/sync-vercel-env.mjs",
+    "env:rotate": "node scripts/rotate-env-secret.mjs",
+    "env:import-github-key": "node scripts/import-github-key.mjs"
   },
   "dependencies": {
     "@daytona/sdk": "^0.204.1",
     "@fontsource-variable/public-sans": "^5.3.0",
     "@langchain/core": "^1.2.6",
     "@langchain/langgraph": "^1.4.9",
+    "@modelcontextprotocol/server": "^2.0.0",
     "mongodb": "^7.5.0",
     "next": "16.3.0",
     "next-auth": "^5.0.0-beta.30",

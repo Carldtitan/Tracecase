@@ -10,7 +10,7 @@ import {
 
 const safeRepositoryPath = z.string().min(1).max(512).refine((value) => {
   const normalized = value.replaceAll("\\", "/");
-  return !normalized.startsWith("/") && !normalized.includes("../") && !normalized.includes("\0") && !/(^|\/)\.git(\/|$)/i.test(normalized);
+  return /^[A-Za-z0-9_./-]+$/.test(normalized) && !normalized.startsWith("/") && !normalized.includes("../") && !normalized.includes("\0") && !/(^|\/)\.git(\/|$)/i.test(normalized);
 }, "Unsafe repository path");
 
 export const browserActionSchema = z.object({
@@ -30,7 +30,7 @@ export const remoteJobSchema = z.object({
   runId: z.string(),
   organizationId: z.string(),
   projectId: z.string(),
-  repository: z.object({ owner: z.string(), name: z.string(), defaultBranch: z.string(), installationId: z.string() }),
+  repository: z.object({ owner: z.string().regex(/^[A-Za-z0-9_.-]+$/), name: z.string().regex(/^[A-Za-z0-9_.-]+$/), defaultBranch: z.string().regex(/^[A-Za-z0-9_./-]+$/).refine((value) => !value.includes("..") && !value.startsWith("/") && !value.endsWith("/")), installationId: z.string().regex(/^\d+$/) }),
   report: z.object({
     id: z.string(),
     expected: z.string(),
@@ -46,10 +46,14 @@ export const remoteJobSchema = z.object({
   targetAllowedDomains: z.array(z.string()).min(1).max(40),
   privateSelectors: z.array(z.string()).min(1).max(30),
   environments: z.array(environmentSchema).min(1).max(24),
+  reporterAttachments: z.array(z.object({ id: z.string(), mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]), contentBase64: z.string().max(4_000_000) })).max(5).default([]),
+  memoryContext: z.array(repositoryChunkSchema).max(10).default([]),
   budget: z.object({ maxMinutes: z.number().int().min(1).max(60), maxWorkers: z.number().int().min(1).max(24) }),
   callbackUrl: z.string().url(),
+  frameCallbackUrl: z.string().url(),
   browserImage: z.string().min(1),
   playwrightVersion: z.string().regex(/^\d+\.\d+\.\d+$/),
+  daytonaSecretIds: z.array(z.string()).max(6).default([]),
 });
 export type RemoteJob = z.infer<typeof remoteJobSchema>;
 
