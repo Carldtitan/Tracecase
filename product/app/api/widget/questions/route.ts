@@ -1,9 +1,10 @@
 import { json, problem } from "@/lib/tracecase/http";
-import { intakeQuestions } from "@/lib/tracecase/service";
+import { generateIntakeQuestions } from "@/lib/tracecase/service";
 
 export async function POST(request: Request) {
   try {
-    return json({ questions: intakeQuestions(await request.json()), deterministic: true, maxQuestions: 3 });
+    const result = await generateIntakeQuestions(await request.json());
+    return json({ ...result, maxQuestions: 3 });
   } catch (error) {
     return problem(error);
   }

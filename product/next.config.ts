@@ -6,6 +6,10 @@ const widgetAncestors = (process.env.TRACECASE_WIDGET_ALLOWED_ORIGINS ?? "")
   .filter((value) => /^https?:\/\/[^\s;]+$/.test(value));
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/api/widget/report": ["./worker/**/*"],
+    "/api/runs/*/dispatch": ["./worker/**/*"],
+  },
   images: {
     remotePatterns: [{ protocol: "https", hostname: "avatars.githubusercontent.com" }],
   },
