@@ -78,7 +78,7 @@ async function fireworks(messages, name, schema) {
         filesToRead: [],
         searchTerms: ["Start Agent", "campaign", "submit"],
         browserPlan: isDomainSdr ? {
-          startPath: job.report.route || "/",
+          startPath: "/",
           actions: [
             { kind: "goto", selector: null, value: null },
             { kind: "fill", selector: "input[name='domain']", value: "tracecase-demo.com" },
@@ -199,7 +199,7 @@ function browserStackCapabilities(environment, workerId) {
   const common = { projectName: "Tracecase", buildName: job.runId, sessionName: workerId, debug: true, networkLogs: true, consoleLogs: "info", video: true };
   if (environment.deviceProfile === "android") return { browserName: "Chrome", "bstack:options": { ...common, deviceName: environment.deviceModel || "Google Pixel 7 Pro", osVersion: "13.0", realMobile: "true", deviceOrientation: "portrait" } };
   if (environment.operatingSystem === "ios") return { browserName: "Safari", "bstack:options": { ...common, deviceName: environment.deviceModel || "iPhone 16 Pro", osVersion: "18", realMobile: "true", deviceOrientation: "portrait" } };
-  if (environment.operatingSystem === "macos") return { browserName: "Safari", browserVersion: "latest", "bstack:options": { ...common, os: "OS X", osVersion: "Sequoia", resolution: `${environment.viewport.width}x${environment.viewport.height}` } };
+  if (environment.operatingSystem === "macos") return { browserName: "Safari", browserVersion: "latest", "bstack:options": { ...common, os: "OS X", osVersion: "Sequoia" } };
   return { browserName: environment.deviceModel?.includes("Edge") ? "Edge" : "Chrome", browserVersion: "latest", "bstack:options": { ...common, os: "Windows", osVersion: "11", resolution: `${environment.viewport.width}x${environment.viewport.height}` } };
 }
 
@@ -301,6 +301,8 @@ async function runBrowserStackWorker(environment, index, plan) {
     await progress(3001 + index * 10, "worker.completed", "browser", `Real ${environment.operatingSystem} environment ${index + 1} ${status}.`, { workerId, status, durationMs: result.durationMs, provider: "browserstack", providerSessionId: sessionId });
     return { result, artifacts, actionTrace };
   } catch (error) {
+    const errorFrame = sessionId ? await captureFrame().catch(() => undefined) : undefined;
+    if (errorFrame) artifacts.push({ workerId, kind: "screenshot", mimeType: "image/png", contentBase64: errorFrame });
     const result = { workerId, environment, status: "error", assertions: plan.assertions, console: consoleEntries, network: networkEntries, artifactIds: [], error: redact(error instanceof Error ? error.message : error, 2000), durationMs: Date.now() - started, ...(sessionId ? { providerSessionId: sessionId } : {}) };
     await progress(3001 + index * 10, "worker.completed", "browser", `Real ${environment.operatingSystem} environment ${index + 1} failed to execute.`, { workerId, status: "error", provider: "browserstack" });
     return { result, artifacts, actionTrace };
@@ -313,12 +315,13 @@ async function runBrowserWorker(environment, index, plan) {
   if (environment.executionProvider === "browserstack" && environment.realDevice === true) return runBrowserStackWorker(environment, index, plan);
   const workerId = `worker_${job.runId}_${index + 1}`.replace(/[^a-zA-Z0-9_:-]/g, "_");
   await progress(3000 + index * 10, "worker.started", "browser", `Environment ${index + 1} started.`, { workerId, environment });
+  const workerAllowedDomains = [...new Set(["registry.npmjs.org", ...job.targetAllowedDomains, new URL(job.frameCallbackUrl).hostname])].join(",");
   const sandbox = await daytona.create({
     image: job.browserImage,
     language: "typescript",
     name: `${workerId.replace(/[^a-z0-9-]/gi, "-").slice(-45)}`,
     labels: { product: "tracecase", runId: job.runId, workerId, role: "browser" },
-    domainAllowList: "registry.npmjs.org",
+    domainAllowList: workerAllowedDomains,
     autoStopInterval: 0,
     autoDeleteInterval: Math.min(60, job.budget.maxMinutes + 5),
     ttlMinutes: Math.min(60, job.budget.maxMinutes + 10),
@@ -332,7 +335,6 @@ async function runBrowserWorker(environment, index, plan) {
     ]);
     const install = await sandbox.process.executeCommand(`npm init -y >/dev/null && npm install --no-audit --no-fund playwright@${job.playwrightVersion}`, tracecaseRoot, undefined, 180);
     if (install.exitCode !== 0) throw new Error(`Playwright package installation failed: ${redact(install.result, 1000)}`);
-    await sandbox.updateNetworkSettings({ domainAllowList: [...new Set([...job.targetAllowedDomains, new URL(job.frameCallbackUrl).hostname])].join(",") });
     const executed = await sandbox.process.executeCommand(`node browser-worker.mjs browser-job.json browser-result.json`, tracecaseRoot, undefined, Math.min(180, job.budget.maxMinutes * 60));
     if (executed.exitCode !== 0) throw new Error(`Browser worker exited ${executed.exitCode}: ${redact(executed.result, 1000)}`);
     const result = JSON.parse((await sandbox.fs.downloadFile(`${tracecaseRoot}/browser-result.json`)).toString("utf8"));
