@@ -1,0 +1,60 @@
+name: Conditional Apple reproduction
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Tracecase run ID
+        required: true
+        type: string
+      target:
+        description: Apple target
+        required: true
+        default: macos-webkit
+        type: choice
+        options:
+          - macos-webkit
+          - ios-simulator
+
+permissions:
+  contents: read
+
+jobs:
+  macos-webkit:
+    if: inputs.target == 'macos-webkit'
+    runs-on: macos-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: product
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: product/package-lock.json
+      - run: npm ci
+      - run: npx playwright install webkit
+      - run: npm run test:apple-webkit
+        env:
+          TRACECASE_RUN_ID: ${{ inputs.run_id }}
+
+  ios-simulator:
+    if: inputs.target == 'ios-simulator'
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require the optional native harness
+        shell: bash
+        run: |
+          test -d apple/TracecaseHarness || {
+            echo "The optional iOS harness is not configured. Core Tracecase runs do not depend on it."
+            exit 1
+          }
+      - name: Boot simulator and run the harness
+        shell: bash
+        run: |
+          xcrun simctl boot "iPhone 16 Pro" || true
+          xcodebuild test -project apple/TracecaseHarness/TracecaseHarness.xcodeproj -scheme TracecaseHarness -destination 'platform=iOS Simulator,name=iPhone 16 Pro'

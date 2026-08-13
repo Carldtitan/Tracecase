@@ -1,0 +1,56 @@
+{
+  "name": "tracecase-product",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "npm run test:unit && npm run typecheck && npm run build",
+    "test:unit": "node --import tsx --test tests/domain.test.ts tests/store.test.ts tests/orchestration.test.ts",
+    "test:apple-webkit": "node --import tsx --test tests/apple-webkit.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "mongo:plan": "tsx scripts/mongodb-plan.ts",
+    "mongo:apply": "tsx scripts/mongodb-apply.ts",
+    "project:bootstrap": "tsx scripts/bootstrap-project.ts",
+    "repo:index-local": "tsx scripts/index-local.ts",
+    "worker:run": "tsx scripts/worker-run.ts",
+    "connections:check": "tsx scripts/check-connections.ts"
+  },
+  "dependencies": {
+    "@daytona/sdk": "^0.204.1",
+    "@langchain/core": "^1.2.6",
+    "@langchain/langgraph": "^1.4.9",
+    "mongodb": "^7.5.0",
+    "next": "16.3.0",
+    "next-auth": "^5.0.0-beta.30",
+    "playwright": "^1.62.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "sharp": "^0.35.3",
+    "ws": "^8.21.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.4",
+    "@next/eslint-plugin-next": "16.3.0",
+    "@tailwindcss/postcss": "4.2.1",
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.4.0",
+    "tailwindcss": "4.2.1",
+    "tsx": "^4.23.12",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.59.3"
+  },
+  "type": "module"
+}

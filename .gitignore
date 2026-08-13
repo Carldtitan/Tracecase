@@ -1,0 +1,36 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+**/node_modules/
+**/.next/
+**/.vercel/
+**/.vinext/
+**/.wrangler/
+**/dist/
+**/out/
+**/coverage/
+**/*.tsbuildinfo
+product/.artifacts/
+product/.openai/
+product/build/
+
+# Local tooling and generated files
+.playwright-cli/
+.impeccable/
+Do_not_push/
+output/
+tmp/
+skills/
+
+# Specs from earlier concepts are not part of Tracecase
+specs/*
+!specs/tracecase/
+!specs/tracecase/**
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+*.log
