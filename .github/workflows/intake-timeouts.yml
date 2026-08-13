@@ -1,0 +1,20 @@
+name: Continue timed-out intake
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+jobs:
+  continue-intake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process reports waiting more than 24 hours
+        env:
+          TRACECASE_CRON_SECRET: ${{ secrets.TRACECASE_CRON_SECRET }}
+        run: |
+          test -n "$TRACECASE_CRON_SECRET"
+          curl --fail-with-body --silent --show-error \
+            --retry 2 \
+            -H "Authorization: Bearer $TRACECASE_CRON_SECRET" \
+            https://tracecase.vercel.app/api/cron/intake-timeouts
