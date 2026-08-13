@@ -125,19 +125,6 @@ The main agent roles are:
 - **Verifier** — tests the base and patch in a clean sandbox.
 - **Review agent** — creates the GitHub handoff only after the proof gate passes.
 
-## A clear live demo
-
-The intended two-minute Class C demo starts with no customer cookies, replay, or known device state:
-
-1. A customer opens the embedded Tracecase reporter, describes a visible bug, and submits it.
-2. The dashboard creates a case, marks it **Class C**, and shows the missing facts.
-3. Several environment tiles begin work at the same time. The audience can see the active page, action, environment, and status for each worker.
-4. One environment fails the expected-behavior assertion. Tracecase shows the exact steps, screenshot, console or network evidence, and affected environment.
-5. The agent identifies the relevant repository files and proposes a small regression test and patch.
-6. The review page shows **base failed**, **patch passed**, the code diff, and the resulting GitHub pull request. If proof is incomplete, the demo ends at diagnosis and makes that limitation visible.
-
-This makes the user, action, and result visible within minutes: **a customer reports a problem; agents reproduce and test it; engineering receives evidence and a reviewable change.**
-
 ## Technology stack
 
 | Technology | Role in Tracecase |
@@ -188,13 +175,6 @@ The following statements are intentionally precise:
 - GitHub App authentication, installation access, repository permissions, and signed webhook delivery have been validated.
 - BrowserStack credentials have launched and captured screenshots from Windows 11 with Chrome, macOS Sequoia with Safari, a physical Google Pixel 7 Pro, and a physical iPhone 16 Pro.
 - The code implements reporter uploads, Fireworks-generated follow-ups with a deterministic fallback, durable 24-hour intake continuation, genuine-platform planning, signed live frames, Fireworks vision input, proof-gated GitHub pull requests, team roles, and an authenticated MCP endpoint.
-
-### Still needs end-to-end production validation
-
-- One public Vercel run has not yet been demonstrated from reporter submission through Daytona, all selected BrowserStack workers, Fireworks analysis, clean verification, and an agent-created pull request as a single uninterrupted workflow.
-- The dashboard frame feed is a near-live sequence of signed screenshots, not high-frame-rate WebRTC video. BrowserStack session video is available after a session completes.
-- Automatic merge and deployment are policy-gated, disabled by default, and are not part of the required demonstration.
-- Optional Sentry, Jira, and OpenTelemetry adapters require each deploying organization to supply its own connection.
 
 ## Run locally
 
