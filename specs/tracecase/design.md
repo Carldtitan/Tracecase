@@ -29,6 +29,14 @@ Tracecase is a multi-tenant control plane for report intake, context retrieval, 
 
 ## High-level architecture
 
+### Production execution topology
+
+Vercel is the short-lived authenticated control plane. It writes the queued Run to MongoDB and provisions one Daytona coordinator, then returns. The coordinator holds the short-lived provider credentials needed to plan and provision work, but it never installs dependencies or executes code from the connected repository.
+
+Each planned browser environment runs in its own Daytona sandbox. Browser sandboxes receive a signed task, public test URL, network allowlist, and privacy selectors; they receive no GitHub, MongoDB, Fireworks, or Daytona credential. A separate verifier sandbox receives the pinned repository and proposed file content. It may install dependencies and run allowlisted test/start commands, but it also receives no provider credential.
+
+The coordinator sends HMAC-signed progress and completion callbacks to the control plane. A production LangGraph completion graph stores artifacts and repository context, applies the deterministic proof gate, and uses the GitHub App to create an atomic commit and draft pull request. The callback is idempotent: artifacts and events use deterministic identifiers, MongoDB writes are upserts, and the GitHub adapter returns the existing Tracecase pull request instead of duplicating it.
+
 ```text
 Host website + widget        Engineer dashboard
           |                         |

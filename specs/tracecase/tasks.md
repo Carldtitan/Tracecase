@@ -2,7 +2,7 @@
 
 ## Status
 
-The local product and all provider-facing code paths are implemented. The default runtime is fixture mode with in-memory persistence and all external calls disabled. Credential-dependent activation is listed separately at the end of this file. Those checks must not be marked complete until the real provider confirms them.
+The local product and provider-facing execution paths are implemented. The production environment contract selects live mode, MongoDB persistence, and automatic dispatch; tests inject isolated in-memory fixtures and never make provider calls. Credential-dependent activation is listed separately at the end of this file. Those checks must not be marked complete until the real provider confirms them.
 
 ## Verification discipline
 
@@ -11,7 +11,7 @@ The local product and all provider-facing code paths are implemented. The defaul
 - A fix needs baseline-fail, patch-pass, and a comparable environment.
 - Unknown reporter state stays Unknown.
 - Branch push and draft pull request creation follow Project policy.
-- V1 has no merge or deploy capability.
+- Merge and deploy are disabled by default and require both the full proof gate and explicit durable project policy.
 
 ## Completed local implementation
 
@@ -106,7 +106,7 @@ The local product and all provider-facing code paths are implemented. The defaul
   - [x] 13.1 Add policy gates for branch push and draft pull-request creation.
   - [x] 13.2 Add idempotent branch, file-commit, and draft pull-request methods.
   - [x] 13.3 Build the review body from Case, run, evidence bundle, tested scope, regression proof, files, and uncertainty.
-  - [x] 13.4 Make merge and deploy methods impossible in V1.
+  - [x] 13.4 Keep merge and deploy disabled in the default project policy.
   - _Requirements: 13, 15, 17, 18_
 
 - [x] 14. Make LangGraph orchestration durable
@@ -131,6 +131,18 @@ The local product and all provider-facing code paths are implemented. The defaul
   - [x] 16.5 Pass TypeScript, ESLint, unit, replay, redaction, build, rendered HTML, and local HTTP checks.
   - _Requirements: 3–20_
 
+- [x] 17. Implement the provider-backed execution path
+  - [x] 17.1 Dispatch each queued run to a long-lived Daytona coordinator outside the Vercel request lifecycle.
+  - [x] 17.2 Pin and read the connected GitHub repository without executing repository code in the credential-bearing coordinator.
+  - [x] 17.3 Use Fireworks structured output for bounded hypotheses, browser actions, assertions, diagnosis, regression test, and smallest-file patch proposals.
+  - [x] 17.4 Create separate credential-free Daytona browser sandboxes and a separate credential-free repository verifier sandbox.
+  - [x] 17.5 Require real reproduction, baseline-failing regression, patched pass, comparable environment, and relevant checks before a repository write.
+  - [x] 17.6 Persist signed progress callbacks, redacted screenshots, evidence, repository context, and terminal status in MongoDB through a production LangGraph completion graph.
+  - [x] 17.7 Create one atomic GitHub commit, a non-overwriting Tracecase branch, and an idempotent draft pull request through the installed GitHub App.
+  - [x] 17.8 Add automatic dispatch, authenticated Start/Retry, live run refresh, evidence rendering, and downloadable private artifacts.
+  - [x] 17.9 Add remote callback schema validation, HMAC authentication, tenant checks, repository path checks, command allowlists, TTL cleanup, and PR proof tests.
+  - _Requirements: 7–18, 20_
+
 ## Provider activation gates for tomorrow
 
 These items need credentials or provider-side resources. The code is present, but these checks are intentionally not marked complete.
@@ -138,13 +150,17 @@ These items need credentials or provider-side resources. The code is present, bu
 - [ ] A1. Create the Atlas Project and cluster, then set `TRACECASE_PERSISTENCE=mongodb` and `MONGODB_URI`.
 - [ ] A2. Run `npm run mongo:plan`, inspect the output, then run `MONGODB_APPLY_CHANGES=true npm run mongo:apply` against the intended database.
 - [ ] A3. Create the two Atlas Vector Search or Automated Embedding indexes from `atlasSearchIndexPlans`; confirm their dimensions match the selected embedding model.
-- [ ] A4. Configure the Fireworks key and selected vision/tool-use model, then replace fixture reasoning with the live structured-output adapter.
-- [ ] A5. Configure Daytona, upload a signed Worker manifest, run `scripts/worker-entry.sh`, and confirm browser artifacts return to the control plane.
-- [ ] A6. Create and install the GitHub App, set its App and webhook credentials, verify the webhook, and test one dedicated branch plus one draft pull request in a disposable repository.
+- [ ] A4. Configure the Fireworks key and selected structured-output model, then confirm a live investigation and patch plan return through the implemented adapter.
+- [ ] A5. Configure Daytona, submit one report, and confirm the coordinator, browser sandboxes, verifier, signed callbacks, and retained screenshots complete against the intended region and quota.
+- [ ] A6. Create and install the GitHub App, set its App and webhook credentials, verify the webhook, and validate the implemented atomic commit plus draft pull request path in a disposable repository.
 - [ ] A7. Set the real repository, commit, target test URL, fixture authorization, and allowed hosts for the demo Project.
 - [ ] A8. Send real OpenTelemetry data if the target application has it. Keep Sentry and Jira disabled unless they add useful context.
 - [ ] A9. Run one provider-backed Class-C investigation. Confirm eight stable tiles, a failed observable assertion, a redacted Evidence Bundle, base-fail, patch-pass, and a draft pull request.
 - [ ] A10. Run secret scanning and inspect provider-granted scopes before the stage demo.
+- [ ] A11. Configure BrowserStack Automate and prove one Windows VM, one macOS VM, one physical Android device, and one physical iPhone session. Confirm live frames and completed replays in the run wall.
+- [ ] A12. Add `CRON_SECRET` to Vercel and the matching `TRACECASE_CRON_SECRET` to GitHub Actions; prove a backdated draft is continued once.
+- [ ] A13. Connect an MCP client to `/api/mcp` with `MCP_API_KEY`, list tools, read a run, and dispatch a disposable queued run.
+- [ ] A14. Keep release flags false for the first provider run. Then prove auto-merge and the Vercel deploy hook in a disposable repository before enabling either for a real project.
 
 ## Commands
 
@@ -154,9 +170,22 @@ From `product/`:
 npm run typecheck
 npm run lint
 npm test
-npm run demo:local
 npm run mongo:plan
 npm run repo:index-local -- .
 ```
 
 The MongoDB apply command refuses to run unless `MONGODB_APPLY_CHANGES=true`. All live adapters refuse to run unless `TRACECASE_RUNTIME_MODE=live` and `ALLOW_EXTERNAL_CALLS=true`.
+
+## Production feature completion
+
+- [x] 18. Secure reporter files and screenshots with signed sessions, limits, metadata stripping, redaction, MongoDB blob storage, retention, and deletion.
+- [x] 19. Generate repository-aware Fireworks follow-up questions with deterministic fallback and store reporter answers.
+- [x] 20. Persist incomplete intake drafts and process them after 24 hours through authenticated schedules.
+- [x] 21. Store signed masked live frames per Worker and render the updating multi-environment wall.
+- [x] 22. Send masked screenshots to Fireworks vision and preserve visual findings as reproduction evidence.
+- [x] 23. Add BrowserStack execution for Windows/macOS cloud VMs and physical Android/iOS devices, including completed session replay URLs.
+- [x] 24. Add active-organization persistence, owner bootstrap, team invitations, acceptance, roles, and member removal.
+- [x] 25. Add an authenticated Streamable HTTP MCP endpoint with case, run, and dispatch tools.
+- [x] 26. Add proof-gated GitHub squash merge and post-merge Vercel deploy-hook execution, disabled by default.
+
+Provider activation remains an external gate: BrowserStack sessions, Fireworks vision, GitHub merge, and Vercel deployment cannot be marked live-verified until credentials, account permissions, and a disposable target are configured.
