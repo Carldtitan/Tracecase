@@ -13,4 +13,3 @@ export async function startRun(formData: FormData) {
   revalidatePath(`/app/runs/${runId}`);
   revalidatePath("/app/runs");
 }
-
