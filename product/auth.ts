@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
+import { uiPreviewEnabled } from "@/lib/tracecase/ui-preview";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: process.env.AUTH_TRUST_HOST === "true" || Boolean(process.env.VERCEL),
@@ -14,6 +15,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     authorized({ auth: session, request }) {
       if (!request.nextUrl.pathname.startsWith("/app")) return true;
+      if (uiPreviewEnabled()) return true;
       return Boolean(session?.user);
     },
   },

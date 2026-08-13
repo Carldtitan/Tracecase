@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { BrandMark } from "../components/BrandMark";
 import { Icon } from "../components/Icon";
 
 type Step = "observed" | "expected" | "frequency" | "consent" | "sending" | "done" | "error";
@@ -149,7 +150,7 @@ function Reporter() {
     <main className="reporter-page">
       <section className="reporter-shell" aria-label="Tracecase bug reporter">
         <header className="reporter-header">
-          <div className="reporter-brand"><span className="brand-mark">T</span><span><strong>Tracecase</strong><small>Support</small></span></div>
+          <div className="reporter-brand"><BrandMark /><span><strong>Tracecase</strong><small>Support</small></span></div>
           <div className="reporter-header-actions"><button className={`icon-button voice-toggle ${voiceReplies ? "voice-on" : ""}`} type="button" onClick={() => setVoiceReplies((value) => !value)} aria-label={voiceReplies ? "Turn voice replies off" : "Turn voice replies on"} aria-pressed={voiceReplies}><Icon name="volume" /></button>{embedded && <button className="icon-button reporter-close" type="button" onClick={closeReporter} aria-label="Close reporter"><Icon name="close" /></button>}</div>
         </header>
 

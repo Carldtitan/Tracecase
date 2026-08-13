@@ -34,6 +34,8 @@ node -e "console.log('pk_'+require('crypto').randomBytes(24).toString('base64url
 
 Keep `TRACECASE_RUNTIME_MODE=live`, `TRACECASE_PERSISTENCE=mongodb`, and `ALLOW_EXTERNAL_CALLS=true`. `MONGODB_DATABASE` is the Atlas database name; keep `tracecase` unless you intentionally use another database. Keep `MONGODB_APPLY_CHANGES=false` in Vercel. `FIREWORKS_BASE_URL` and `DAYTONA_API_URL` are provider endpoints, not secrets.
 
+For local UI inspection without GitHub credentials, start the development server with `TRACECASE_UI_PREVIEW=true npm run dev`. This bypass exists only when `NODE_ENV=development`; it cannot open dashboard routes in a production build.
+
 ## 2. MongoDB Atlas
 
 1. Open [MongoDB Atlas](https://cloud.mongodb.com/) and create or select the hackathon project and cluster.

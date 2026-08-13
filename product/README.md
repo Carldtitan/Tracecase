@@ -6,6 +6,11 @@ Tracecase turns customer bug reports into evidence-backed investigations and tes
 
 - `/` — GitHub sign-in.
 - `/app` — authenticated engineering dashboard.
+- `/app/cases` — customer reports.
+- `/app/runs` — investigations.
+- `/app/repositories` — repository connection.
+- `/app/connections` — service configuration.
+- `/app/settings` — reporter and workspace settings.
 - `/intake` — isolated public reporter iframe.
 - `/tracecase-widget.js` — embeddable reporter loader.
 
@@ -36,6 +41,8 @@ The dashboard never links to the reporter. The reporter receives a public projec
    ```powershell
    npm run dev
    ```
+
+   To inspect dashboard UI locally before configuring GitHub, use `TRACECASE_UI_PREVIEW=true npm run dev`. Preview mode is development-only.
 
 ## Embed
 
