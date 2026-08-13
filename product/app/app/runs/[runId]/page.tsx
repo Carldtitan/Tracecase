@@ -8,8 +8,9 @@ import { Icon } from "../../../components/Icon";
 import { startRun } from "./actions";
 import { LiveRefresh } from "./LiveRefresh";
 
-export default async function RunDetailPage({ params }: { params: Promise<{ runId: string }> }) {
+export default async function RunDetailPage({ params, searchParams }: { params: Promise<{ runId: string }>; searchParams: Promise<{ start?: string }> }) {
   const { runId } = await params;
+  const query = await searchParams;
   let result;
   try {
     result = await getRun(getDefaultScope(), runId);
@@ -27,6 +28,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ runI
     <main className="dashboard-page">
       <LiveRefresh active={active} />
       <PageHeader eyebrow="Investigation" title={run.id} action={headerAction} />
+      {query.start === "failed" && <div className="run-error-banner" role="alert"><Icon name="warning" size={17} /><span><strong>The run did not start.</strong> The case is safe. Check Connections, then retry.</span></div>}
       <section className="run-summary-bar"><StatusLabel value={run.status} /><span>Context class <strong>{run.contextClass}</strong></span><span>{run.budget.workersUsed}/{run.budget.maxWorkers} environments</span><span>{run.modelBundle.model}</span></section>
       <section className="run-section"><div className="section-heading"><div><span className="eyebrow">Environments</span><h2>Live preview</h2></div><span>{run.environments.length}</span></div>{run.environments.length ? <div className="environment-grid">{run.environments.map((environment, index) => {
         const workerId = `worker_${run.id}_${index + 1}`.replace(/[^a-zA-Z0-9_:-]/g, "_");

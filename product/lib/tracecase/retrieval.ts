@@ -52,9 +52,15 @@ export async function retrieveRepositoryContext(input: {
     { $vectorSearch: { index: "repo_knowledge_auto", path: "content", query: input.semanticQuery, model: "voyage-code-3", numCandidates: 100, limit: 5, filter } },
     { $project: { embedding: 0, score: { $meta: "vectorSearchScore" } } },
   ];
-  const chunks = input.mongoCollection
-    ? await input.mongoCollection.aggregate<RepositoryChunk>(pipeline).toArray()
-    : await input.store.findRepositoryChunksSemantic(input.scope, input.semanticQuery, { repository: input.repository, commit: input.commit });
+  let chunks: RepositoryChunk[];
+  try {
+    chunks = input.mongoCollection
+      ? await input.mongoCollection.aggregate<RepositoryChunk>(pipeline).toArray()
+      : await input.store.findRepositoryChunksSemantic(input.scope, input.semanticQuery, { repository: input.repository, commit: input.commit });
+  } catch (error) {
+    console.warn("Tracecase semantic retrieval unavailable; continuing with exact context only.", { name: error instanceof Error ? error.name : "UnknownError" });
+    return { route: "none", chunks: [], queryPlan: { pipeline, fallback: "semantic_search_unavailable" } };
+  }
   if (chunks.length === 0) return { route: "none", chunks: [], queryPlan: pipeline };
   return { route: "semantic", chunks, queryPlan: pipeline };
 }

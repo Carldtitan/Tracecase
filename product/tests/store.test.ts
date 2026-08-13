@@ -37,3 +37,12 @@ test("repository retrieval performs exact lookup without an embedding", async ()
   assert.equal(result.route, "exact");
   assert.equal(result.chunks[0].path, "src/components/PublishButton.tsx");
 });
+
+test("repository retrieval keeps a run alive when semantic search is unavailable", async () => {
+  const store = new MemoryTracecaseStore();
+  store.findRepositoryChunksSemantic = async () => { throw new Error("vector service unavailable"); };
+  const result = await retrieveRepositoryContext({ store, scope: fixtureScope, identifiers: [], semanticQuery: "checkout fails on mobile" });
+  assert.equal(result.route, "none");
+  assert.deepEqual(result.chunks, []);
+  assert.equal((result.queryPlan as { fallback?: string }).fallback, "semantic_search_unavailable");
+});

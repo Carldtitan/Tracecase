@@ -1,8 +1,8 @@
 export type IconName =
   | "activity" | "arrow" | "back" | "cases" | "check" | "chevron" | "chevron-right"
   | "close" | "code" | "connections" | "database" | "external" | "folder" | "github"
-  | "home" | "menu" | "mic" | "more" | "pause" | "play" | "report" | "search"
-  | "settings" | "spark" | "terminal" | "timeline" | "volume" | "attachment" | "team";
+  | "home" | "menu" | "more" | "pause" | "play" | "report" | "search"
+  | "settings" | "spark" | "terminal" | "timeline" | "attachment" | "team" | "warning";
 
 const paths: Record<IconName, React.ReactNode> = {
   activity: <path d="M3 12h3l2.2-5 3.5 10 2.5-6H21" />,
@@ -21,7 +21,6 @@ const paths: Record<IconName, React.ReactNode> = {
   github: <path d="M15 22v-3.9c.04-1-.36-1.8-.8-2.2 2.6-.3 5.3-1.3 5.3-5.8 0-1.3-.5-2.3-1.2-3.1.1-.3.5-1.5-.1-3.1 0 0-1-.3-3.2 1.2A11 11 0 0 0 12 4.7c-1 0-2 .1-2.9.4C6.9 3.6 6 4 6 4c-.7 1.6-.3 2.8-.2 3.1-.8.8-1.2 1.8-1.2 3.1 0 4.5 2.7 5.5 5.3 5.8-.4.4-.7 1-.8 1.8-.8.4-2.8 1-4-1.2-.8-1.4-2-1.5-2-1.5M9 22v-3.7" />,
   home: <path d="m3 11 9-8 9 8v9h-6v-6H9v6H3z" />,
   menu: <path d="M5 7h14M5 12h14M5 17h14" />,
-  mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" /></>,
   more: <><circle cx="6" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="18" cy="12" r="1" fill="currentColor" stroke="none" /></>,
   pause: <path d="M8 6v12M16 6v12" />,
   play: <path d="m9 6 9 6-9 6z" />,
@@ -31,9 +30,9 @@ const paths: Record<IconName, React.ReactNode> = {
   spark: <path d="m12 2 1.6 5.2L19 9l-5.4 1.8L12 16l-1.6-5.2L5 9l5.4-1.8ZM18.5 15l.7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7Z" />,
   terminal: <path d="m5 7 4 4-4 4M11 16h8" />,
   timeline: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
-  volume: <><path d="M5 10v4h3l4 4V6l-4 4zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></>,
   attachment: <path d="m8 12.5 6.3-6.3a3 3 0 0 1 4.2 4.2l-8.1 8.1a5 5 0 0 1-7.1-7.1l8-8M7 15l7.8-7.8" />,
   team: <><circle cx="9" cy="8" r="3" /><path d="M3.5 19v-2a4.5 4.5 0 0 1 9 0v2M15 5.5a3 3 0 0 1 0 5.8M15 14a4.5 4.5 0 0 1 5.5 4.4V19" /></>,
+  warning: <><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5M12 17.5h.01" /></>,
 };
 
 export function Icon({ name, size = 18, className }: { name: IconName; size?: number; className?: string }) {
