@@ -1,5 +1,6 @@
 import { patchSchema, type Patch, type RepositoryChunk, type WorkerManifest, type WorkerResult } from "./contracts";
 import { assertExternalIntegration, getConfig } from "./config";
+import { getFireworksSettings, requestFireworksChat } from "./fireworks";
 import { redactText } from "./security";
 import { createSign } from "node:crypto";
 
@@ -10,19 +11,20 @@ export interface ReasoningModel {
 }
 
 export class FireworksReasoningModel implements ReasoningModel {
-  readonly name = process.env.FIREWORKS_MODEL ?? "fireworks:unconfigured";
+  readonly name = getFireworksSettings().model ?? "fireworks:unconfigured";
 
   private async request(messages: Array<{ role: "system" | "user"; content: string }>): Promise<string> {
     const config = getConfig();
-    assertExternalIntegration("Fireworks", [["FIREWORKS_API_KEY", process.env.FIREWORKS_API_KEY]], config);
-    const response = await fetch(`${process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1"}/chat/completions`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${process.env.FIREWORKS_API_KEY}`, "content-type": "application/json" },
-      body: JSON.stringify({ model: this.name, messages, temperature: 0, response_format: { type: "json_object" } }),
+    const fireworks = getFireworksSettings();
+    assertExternalIntegration("Fireworks", [["FIREWORKS_API_KEY", fireworks.apiKey], ["FIREWORKS_MODEL", fireworks.model]], config);
+    return requestFireworksChat({
+      messages,
+      model: this.name,
+      temperature: 0,
+      timeoutMs: 20_000,
+      retries: 1,
+      responseFormat: { type: "json_object" },
     });
-    if (!response.ok) throw new Error(`Fireworks returned ${response.status}`);
-    const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    return body.choices?.[0]?.message?.content ?? "{}";
   }
 
   async plan(input: { report: string; context: RepositoryChunk[] }) {

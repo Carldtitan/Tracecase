@@ -4,6 +4,7 @@ import { Daytona, type Sandbox } from "@daytona/sdk";
 import { getConfig } from "./config";
 import type { InvestigationRun, RunEvent, TenantScope } from "./contracts";
 import { GitHubAdapter } from "./integrations";
+import { getFireworksSettings } from "./fireworks";
 import { classifyContext, planEnvironments } from "./planner";
 import { retrieveRepositoryContext } from "./retrieval";
 import type { RemoteJob } from "./remote-contracts";
@@ -33,6 +34,7 @@ function configuredDomains(targetUrl: string, values: string[]): string[] {
 
 export function liveExecutionConfigured(): boolean {
   const config = getConfig();
+  const fireworks = getFireworksSettings();
   return Boolean(
     config.allowExternalCalls &&
     config.runtimeMode === "live" &&
@@ -41,8 +43,7 @@ export function liveExecutionConfigured(): boolean {
     config.workerSigningSecret &&
     config.appUrl &&
     process.env.DAYTONA_API_KEY &&
-    process.env.FIREWORKS_API_KEY &&
-    process.env.FIREWORKS_MODEL &&
+    fireworks.visionConfigured &&
     process.env.GITHUB_APP_ID &&
     process.env.GITHUB_APP_PRIVATE_KEY_BASE64,
   );
@@ -54,6 +55,7 @@ async function loadWorkerSource(name: string): Promise<Buffer> {
 
 export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ dispatched: boolean; sandboxId?: string; reason?: string }> {
   const config = getConfig();
+  const fireworks = getFireworksSettings();
   const { store } = await getRuntime();
   const leaseKey = `${runId}:remote-dispatch:v1`;
   const leaseOwner = createOpaqueId("dispatcher");
@@ -147,7 +149,7 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
     pendingSecretCleanup = { daytona, ids: [] };
     daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_daytona_${secretSuffix}`, value: process.env.DAYTONA_API_KEY!, hosts: ["*.daytona.io"] }));
     pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
-    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_fireworks_${secretSuffix}`, value: process.env.FIREWORKS_API_KEY!, hosts: [new URL(process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1").hostname] }));
+    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_fireworks_${secretSuffix}`, value: fireworks.apiKey!, hosts: [new URL(fireworks.baseUrl).hostname] }));
     pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
     daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_github_${secretSuffix}`, value: `Bearer ${installationToken}`, hosts: ["*.daytona.io", "github.com", "api.github.com"] }));
     pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
@@ -158,7 +160,7 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
     }
     const job: RemoteJob = remoteJobSchema.parse({ ...jobBase, daytonaSecretIds: daytonaSecrets.map((item) => item.id) });
     const coordinatorDomains = [
-      new URL(process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1").hostname,
+      new URL(fireworks.baseUrl).hostname,
       "github.com",
       "api.github.com",
       "objects.githubusercontent.com",
@@ -177,8 +179,8 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       envVars: {
         DAYTONA_API_URL: process.env.DAYTONA_API_URL ?? "https://app.daytona.io/api",
         DAYTONA_TARGET: process.env.DAYTONA_TARGET ?? "us",
-        FIREWORKS_BASE_URL: process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1",
-        FIREWORKS_MODEL: process.env.FIREWORKS_MODEL!,
+        FIREWORKS_BASE_URL: fireworks.baseUrl,
+        FIREWORKS_MODEL: fireworks.visionModel!,
         WORKER_SIGNING_SECRET: config.workerSigningSecret,
       },
       secrets: {
