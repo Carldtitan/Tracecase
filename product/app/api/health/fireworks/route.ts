@@ -5,7 +5,7 @@ import { json } from "@/lib/tracecase/http";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-const TEST_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Z4s8AAAAASUVORK5CYII=";
+const TEST_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAnklEQVRoge2SQQkAQRDDqqSaz3FWxD3CQCEC0tD04zTRDboB6BW7C3GX6AbdAPSK3YW4S3SDbgB6xe5C3CW6QTcAvWJ3Ie4S3aAbgF6xuxB3iW7QDUCv2F2Iu0Q36AagV+wuxF2iG3QD0Ct2F+Iu0Q26AegVuwtxl+gG3QD0it2FuEt0g24AesXuQtwlukE3AL1idyHuEt2gG4Be8Q8PCG7RhydixY4AAAAASUVORK5CYII=";
 
 function authorized(request: Request): boolean {
   const expected = process.env.CRON_SECRET?.trim();
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
           { type: "image_url", image_url: { url: TEST_IMAGE } },
         ],
       }],
-      maxTokens: 64,
+      maxTokens: 512,
       timeoutMs: 10_000,
       retries: 1,
     });
