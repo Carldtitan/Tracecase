@@ -334,6 +334,14 @@ async function runBrowserWorker(environment, index, plan) {
   if (environment.executionProvider === "browserstack" && environment.realDevice === true) return runBrowserStackWorker(environment, index, plan);
   const workerId = `worker_${job.runId}_${index + 1}`.replace(/[^a-zA-Z0-9_:-]/g, "_");
   await progress(3000 + index * 10, "worker.started", "browser", `Environment ${index + 1} started.`, { workerId, environment });
+  const workerDomains = [...new Set([
+    ...job.targetAllowedDomains,
+    new URL(job.targetUrl).hostname,
+    new URL(job.frameCallbackUrl).hostname,
+    "*.vercel.app",
+    "fonts.googleapis.com",
+    "fonts.gstatic.com",
+  ])].join(",");
   const sandbox = await daytona.create({
     image: job.browserImage,
     language: "typescript",
@@ -342,7 +350,7 @@ async function runBrowserWorker(environment, index, plan) {
     // The worker must download Playwright's browser bundle and follow the
     // target application's own CDN/API requests. Daytona applies this policy
     // when the sandbox is created; changing it after creation is forbidden.
-    domainAllowList: "*",
+    domainAllowList: workerDomains,
     autoStopInterval: 0,
     autoDeleteInterval: Math.min(60, job.budget.maxMinutes + 5),
     ttlMinutes: Math.min(60, job.budget.maxMinutes + 10),
