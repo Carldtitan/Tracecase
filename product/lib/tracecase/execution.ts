@@ -145,11 +145,12 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       }
     }
     const secretSuffix = sha256(`${run.id}:${leaseOwner}`).slice(0, 16);
+    const coordinatorFireworksBaseUrl = `${new URL(callbackUrl).origin}/api/internal/fireworks`;
     const daytonaSecrets: Array<{ id: string; name: string }> = [];
     pendingSecretCleanup = { daytona, ids: [] };
     daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_daytona_${secretSuffix}`, value: process.env.DAYTONA_API_KEY!, hosts: ["*.daytona.io"] }));
     pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
-    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_fireworks_${secretSuffix}`, value: fireworks.apiKey!, hosts: [new URL(fireworks.baseUrl).hostname] }));
+    daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_fireworks_${secretSuffix}`, value: config.workerSigningSecret!, hosts: [new URL(callbackUrl).hostname] }));
     pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
     daytonaSecrets.push(await daytona.secret.create({ name: `tracecase_github_${secretSuffix}`, value: `Bearer ${installationToken}`, hosts: ["*.daytona.io", "github.com", "api.github.com"] }));
     pendingSecretCleanup.ids.push(daytonaSecrets.at(-1)!.id);
@@ -160,7 +161,7 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
     }
     const job: RemoteJob = remoteJobSchema.parse({ ...jobBase, daytonaSecretIds: daytonaSecrets.map((item) => item.id) });
     const coordinatorDomains = [
-      new URL(fireworks.baseUrl).hostname,
+      new URL(callbackUrl).hostname,
       "github.com",
       "api.github.com",
       "objects.githubusercontent.com",
@@ -179,7 +180,7 @@ export async function dispatchRun(scope: TenantScope, runId: string): Promise<{ 
       envVars: {
         DAYTONA_API_URL: process.env.DAYTONA_API_URL ?? "https://app.daytona.io/api",
         DAYTONA_TARGET: process.env.DAYTONA_TARGET ?? "us",
-        FIREWORKS_BASE_URL: fireworks.baseUrl,
+        FIREWORKS_BASE_URL: coordinatorFireworksBaseUrl,
         FIREWORKS_MODEL: fireworks.visionModel!,
         WORKER_SIGNING_SECRET: config.workerSigningSecret,
       },

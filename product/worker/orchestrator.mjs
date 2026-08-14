@@ -96,7 +96,7 @@ async function fireworks(messages, name, schema) {
     response = await fetch(`${process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1"}/chat/completions`, {
     method: "POST",
     headers: { authorization: `Bearer ${process.env.FIREWORKS_API_KEY}`, "content-type": "application/json" },
-    signal: AbortSignal.timeout(name === "tracecase_visual_evidence" ? 60_000 : 30_000),
+    signal: AbortSignal.timeout(name === "tracecase_visual_evidence" ? 90_000 : 30_000),
     body: JSON.stringify({
       model: process.env.FIREWORKS_MODEL,
       temperature: 0,
