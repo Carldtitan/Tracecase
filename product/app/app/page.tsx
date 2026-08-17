@@ -9,7 +9,7 @@ export default async function OverviewPage() {
   const { store } = await getRuntime();
   const project = await store.getProject(getDefaultScope());
   const systems = [
-    { name: "MongoDB", icon: "database" as const, ready: Boolean(process.env.MONGODB_URI && project) },
+    { name: "Supabase", icon: "database" as const, ready: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY && project) },
     { name: "GitHub", icon: "github" as const, ready: Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_SLUG && project?.repository?.installationId) },
     { name: "Fireworks", icon: "spark" as const, ready: Boolean(process.env.FIREWORKS_API_KEY && process.env.FIREWORKS_MODEL) },
     { name: "Daytona", icon: "terminal" as const, ready: Boolean(process.env.DAYTONA_API_KEY && process.env.DAYTONA_API_URL) },

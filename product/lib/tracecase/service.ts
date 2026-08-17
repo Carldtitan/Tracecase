@@ -2,7 +2,7 @@ import { getConfig } from "./config";
 import { getFireworksSettings, requestFireworksChat } from "./fireworks";
 import type { CaseDocument, IntakeDraft, IntakePayload, InvestigationRun, Project, Report, TenantScope } from "./contracts";
 import { intakePayloadSchema } from "./contracts";
-import { MongoTracecaseStore } from "./mongodb";
+import { SupabaseTracecaseStore } from "./supabase";
 import { extractExactIdentifiers } from "./retrieval";
 import { createOpaqueId, redactText, redactUnknown, sha256, verifyToken } from "./security";
 import { getProcessMemoryStore, type TracecaseStore } from "./store";
@@ -15,7 +15,7 @@ declare global {
 
 async function createRuntime(): Promise<Runtime> {
   const config = getConfig();
-  const store = config.persistence === "mongodb" ? await MongoTracecaseStore.connect() : getProcessMemoryStore();
+  const store = config.persistence === "supabase" ? await SupabaseTracecaseStore.connect() : getProcessMemoryStore();
   return { store };
 }
 

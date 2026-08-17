@@ -1,4 +1,3 @@
-import type { Collection } from "mongodb";
 import type { RepositoryChunk, TenantScope } from "./contracts";
 import type { TracecaseStore } from "./store";
 
@@ -34,7 +33,6 @@ export async function retrieveRepositoryContext(input: {
   semanticQuery: string;
   repository?: string;
   commit?: string;
-  mongoCollection?: Collection<RepositoryChunk>;
 }): Promise<RetrievalResult> {
   if (input.identifiers.length > 0) {
     const chunks = await input.store.findRepositoryChunksExact(input.scope, input.identifiers, input.commit);
@@ -46,28 +44,20 @@ export async function retrieveRepositoryContext(input: {
     projectId: input.scope.projectId,
     ...(input.repository ? { repository: input.repository } : {}),
     ...(input.commit ? { commit: input.commit } : {}),
-    contentType: { $in: ["code", "route", "test", "runbook", "decision"] },
+    contentType: ["code", "route", "test", "runbook", "decision"],
   };
-  const pipeline = [
-    { $vectorSearch: { index: "repo_knowledge_auto", path: "content", query: input.semanticQuery, model: "voyage-code-3", numCandidates: 100, limit: 5, filter } },
-    { $project: { embedding: 0, score: { $meta: "vectorSearchScore" } } },
-  ];
+  const queryPlan = { engine: "supabase_pgvector_hybrid", query: input.semanticQuery, limit: 5, filter };
   let chunks: RepositoryChunk[];
   try {
-    chunks = input.mongoCollection
-      ? await input.mongoCollection.aggregate<RepositoryChunk>(pipeline).toArray()
-      : await input.store.findRepositoryChunksSemantic(input.scope, input.semanticQuery, { repository: input.repository, commit: input.commit });
+    chunks = await input.store.findRepositoryChunksSemantic(input.scope, input.semanticQuery, { repository: input.repository, commit: input.commit });
   } catch (error) {
     console.warn("Tracecase semantic retrieval unavailable; continuing with exact context only.", { name: error instanceof Error ? error.name : "UnknownError" });
-    return { route: "none", chunks: [], queryPlan: { pipeline, fallback: "semantic_search_unavailable" } };
+    return { route: "none", chunks: [], queryPlan: { ...queryPlan, fallback: "semantic_search_unavailable" } };
   }
-  if (chunks.length === 0) return { route: "none", chunks: [], queryPlan: pipeline };
-  return { route: "semantic", chunks, queryPlan: pipeline };
+  if (chunks.length === 0) return { route: "none", chunks: [], queryPlan };
+  return { route: "semantic", chunks, queryPlan };
 }
 
 export function buildSemanticDuplicatePipeline(scope: TenantScope, query: string) {
-  return [
-    { $vectorSearch: { index: "operational_memory_auto", path: "content", query, model: "voyage-4", numCandidates: 80, limit: 5, filter: { ...scope, contentType: "report" } } },
-    { $project: { embedding: 0, score: { $meta: "vectorSearchScore" } } },
-  ];
+  return { engine: "supabase_pgvector_hybrid", source: "operational_memory", scope, query, limit: 5, contentType: "report" };
 }

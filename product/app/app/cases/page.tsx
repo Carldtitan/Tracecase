@@ -10,7 +10,7 @@ export default async function CasesPage() {
   try {
     cases = await listCases(getDefaultScope());
   } catch {
-    return <main className="dashboard-page"><PageHeader eyebrow="Cases" title="Customer reports" /><EmptyPanel icon="database" title="Cases unavailable" detail="Connect MongoDB to load reports." action={{ href: "/app/connections", label: "Check connection" }} /></main>;
+    return <main className="dashboard-page"><PageHeader eyebrow="Cases" title="Customer reports" /><EmptyPanel icon="database" title="Cases unavailable" detail="Connect Supabase to load reports." action={{ href: "/app/connections", label: "Check connection" }} /></main>;
   }
   if (!cases.length) return <main className="dashboard-page"><PageHeader eyebrow="Cases" title="Customer reports" /><EmptyPanel icon="cases" title="No cases yet" detail="Complete reports appear here." action={{ href: "/app/settings", label: "Install reporter" }} /></main>;
   return (

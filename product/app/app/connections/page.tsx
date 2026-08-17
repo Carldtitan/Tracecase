@@ -9,7 +9,7 @@ export default async function ConnectionsPage() {
   const { store } = await getRuntime();
   const project = await store.getProject(getDefaultScope());
   const connections: Array<{ name: string; detail: string; icon: IconName; ready: boolean; href: string; action: string }> = [
-    { name: "MongoDB Atlas", detail: "Cases, runs, repo memory", icon: "database", ready: Boolean(process.env.MONGODB_URI && project), href: "https://cloud.mongodb.com/", action: "Open Atlas" },
+    { name: "Supabase", detail: "Cases, runs, repo memory, files", icon: "database", ready: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SECRET_KEY && project), href: "https://supabase.com/dashboard", action: "Open Supabase" },
     { name: "GitHub App", detail: "Repositories and draft PRs", icon: "github", ready: Boolean(process.env.GITHUB_APP_ID && process.env.GITHUB_APP_SLUG && project?.repository?.installationId), href: "https://github.com/settings/apps", action: "GitHub settings" },
     { name: "Fireworks", detail: "Reasoning and vision", icon: "spark", ready: Boolean(process.env.FIREWORKS_API_KEY && process.env.FIREWORKS_MODEL), href: "https://app.fireworks.ai/", action: "Open Fireworks" },
     { name: "Daytona", detail: "Isolated browser workers", icon: "terminal", ready: Boolean(process.env.DAYTONA_API_KEY && process.env.DAYTONA_API_URL), href: "https://app.daytona.io/", action: "Open Daytona" },

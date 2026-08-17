@@ -1,9 +1,7 @@
 /**
- * Tracecase MongoDB schema entry point.
+ * Tracecase domain schema entry point.
  *
- * Runtime validation uses the Zod contracts. Atlas collection validation and
- * index creation use the MongoDB plans. Run `npm run mongo:plan` to inspect the
- * plan without connecting to Atlas.
+ * Runtime validation uses the Zod contracts. Database DDL is versioned under
+ * supabase/migrations.
  */
 export * from "../lib/tracecase/contracts";
-export { atlasSearchIndexPlans, mongoCollectionPlans } from "../lib/tracecase/mongodb";

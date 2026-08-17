@@ -2,7 +2,7 @@
 
 For this checkout, run `npm run env:provision` from `product/`. It repairs and completes the ignored root `.env` and `product/.env.local` files without replacing existing values. It generates Tracecase-owned secrets and reads the GitHub login, primary email, repository, and branch from the authenticated local tools when possible.
 
-After provider credentials are complete, run `npm run env:sync-vercel -- --include-mongodb`. This sends non-empty values to the linked Vercel Production environment through standard input. It does not print secret values. Environment changes require a new deployment.
+After provider credentials are complete, run `npm run env:sync-vercel`. This sends non-empty values to the linked Vercel Production environment through standard input. It does not print secret values. Environment changes require a new deployment.
 
 Use `product/.env.local` on your computer. Use Vercel **Project → Settings → Environment Variables** for deployments. Vercel applies changed values only to new deployments, so redeploy after any edit. `NEXT_PUBLIC_` values are visible in the browser; every other credential must remain server-only. See [Vercel environment variables](https://vercel.com/docs/environment-variables).
 
@@ -43,28 +43,25 @@ node -e "console.log('pk_'+require('crypto').randomBytes(24).toString('base64url
 | `RUN_MAX_MINUTES` | Keep `15` initially. |
 | `MAX_PARALLEL_ENVIRONMENTS` | Keep `12` initially. Lower it if sandbox quota is smaller. |
 
-Keep `TRACECASE_RUNTIME_MODE=live`, `TRACECASE_PERSISTENCE=mongodb`, `ALLOW_EXTERNAL_CALLS=true`, and `AUTO_DISPATCH_RUNS=true`. With automatic dispatch enabled, a submitted report creates a durable run and starts its Daytona coordinator after the reporter receives the response. Set it to `false` only when you want engineers to start runs manually from the run page. `MONGODB_DATABASE` is the Atlas database name; keep `tracecase` unless you intentionally use another database. Keep `MONGODB_APPLY_CHANGES=false` in Vercel. `FIREWORKS_BASE_URL` and `DAYTONA_API_URL` are provider endpoints, not secrets.
+Keep `TRACECASE_RUNTIME_MODE=live`, `TRACECASE_PERSISTENCE=supabase`, `ALLOW_EXTERNAL_CALLS=true`, and `AUTO_DISPATCH_RUNS=true`. With automatic dispatch enabled, a submitted report creates a durable run and starts its Daytona coordinator after the reporter receives the response. Set it to `false` only when you want engineers to start runs manually from the run page. `FIREWORKS_BASE_URL` and `DAYTONA_API_URL` are provider endpoints, not secrets.
 
 For local UI inspection without GitHub credentials, start the development server with `TRACECASE_UI_PREVIEW=true npm run dev`. This bypass exists only when `NODE_ENV=development`; it cannot open dashboard routes in a production build.
 
-## 2. MongoDB Atlas
+## 2. Supabase
 
-1. Open [MongoDB Atlas](https://cloud.mongodb.com/) and create or select the hackathon project and cluster.
-2. Create a database user with read/write access to the `tracecase` database.
-3. Add the deployment’s network access. Atlas accepts connections only from its IP access list and requires a database user. Vercel uses dynamic outbound addresses unless the project has a static-egress option. For a short-lived hackathon deployment, add `0.0.0.0/0` in **Security → Network Access** and protect the database with a strong, database-only user; replace this with restricted networking after the event. A repeated `MongoServerSelectionError` with `ETIMEDOUT` on port `27017` usually means this access-list step is missing. See [Atlas connection troubleshooting](https://www.mongodb.com/docs/atlas/troubleshoot-connection/) and [connection strings](https://www.mongodb.com/docs/manual/reference/connection-string/).
-4. Select **Connect → Drivers → Node.js**. Copy the `mongodb+srv://…` URI, replace the password, and set `MONGODB_URI`.
-5. Keep `MONGODB_DATABASE=tracecase`.
-6. Locally, run:
+1. Create a Supabase project and copy its project URL, publishable key, server secret key, project ID, and region.
+2. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. These values may reach the browser.
+3. Set the server key as `SUPABASE_SECRET_KEY`. Never use `NEXT_PUBLIC_SUPABASE_SECRET_KEY`; that prefix exposes it to browser bundles.
+4. Link and apply the checked-in database migration:
 
    ```powershell
-   npm run mongo:plan
-   $env:MONGODB_APPLY_CHANGES='true'
-   npm run mongo:apply
-   $env:MONGODB_APPLY_CHANGES='false'
-   npm run project:bootstrap
+   npx supabase link --project-ref YOUR_SUPABASE_PROJECT_ID
+   npx supabase db push --linked --include-all
+   npm run supabase:bootstrap
+   npm run supabase:smoke
    ```
 
-7. In Atlas **Search & Vector Search**, create the two automated-embedding indexes printed by `npm run mongo:plan`: `repo_knowledge_auto` on `repository_chunks.content` with `voyage-code-3`, and `operational_memory_auto` on `knowledge.content` with `voyage-4`. Atlas generates and maintains document and query embeddings; Tracecase does not need a separate embedding API key. See [MongoDB Automated Embedding](https://www.mongodb.com/docs/vector-search/crud-embeddings/automated-embedding/).
+The migration enables `pgvector`, tenant indexes, RLS, atomic leases, hybrid semantic/full-text retrieval, a private `tracecase-artifacts` bucket, and Realtime publication. Fireworks generates 768-dimensional embeddings with `FIREWORKS_EMBEDDING_MODEL`; if embedding generation fails, full-text repository retrieval continues.
 
 ## 3. GitHub sign-in and repository access
 
@@ -186,12 +183,12 @@ Run `npm run project:bootstrap` after changing either flag because the durable p
 
 After every value is present:
 
-1. Run `npm run mongo:apply` with `MONGODB_APPLY_CHANGES=true`, then return it to `false`.
-2. Run `npm run project:bootstrap`.
+1. Run `npx supabase db push --linked --include-all`.
+2. Run `npm run supabase:bootstrap` and `npm run supabase:smoke`.
 3. Install the GitHub App and confirm the repository page shows `owner/repository` as **Connected**.
 4. Submit a report against a disposable staging repository. Do not use production for the first activation.
 5. Open its run. The expected progression is `queued → dispatching → planning → running → fixing → verified`.
-6. Confirm MongoDB contains the redacted evidence bundle and screenshot artifacts.
+6. Confirm Supabase contains the redacted evidence bundle and private screenshot artifacts.
 7. Confirm the regression test fails on the untouched commit and passes with the patch.
 8. Confirm GitHub contains one `tracecase/...` branch and one draft PR with both release flags false.
 9. If genuine platforms are required, confirm every BrowserStack tile says **Cloud VM** or **Real device**, shows changing frames, and offers a replay after completion.

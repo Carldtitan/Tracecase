@@ -12,19 +12,14 @@ const examplePath = resolve(rootDir, ".env.example");
 function readEnvironment(path) {
   const values = new Map();
   const extras = new Map();
-  let malformedMongoUri;
   for (const rawLine of readFileSync(path, "utf8").split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (line.startsWith("mongodb+srv://")) {
-      malformedMongoUri = line;
-      continue;
-    }
     const match = rawLine.match(/^([A-Z][A-Z0-9_]*)=(.*)$/);
     if (!match) continue;
     values.set(match[1], match[2]);
     if (match[1].startsWith("VERCEL_")) extras.set(match[1], match[2]);
   }
-  return { values, extras, malformedMongoUri };
+  return { values, extras };
 }
 
 function command(name, args) {
@@ -45,10 +40,8 @@ const values = new Map();
 for (const source of [sources[1], sources[0]]) {
   for (const [key, value] of source.values) if (value && !values.get(key)) values.set(key, value);
 }
-if (!values.get("MONGODB_URI")) {
-  const malformed = sources.map((source) => source.malformedMongoUri).find(Boolean);
-  if (malformed) values.set("MONGODB_URI", malformed);
-}
+if (!values.get("SUPABASE_SECRET_KEY") && values.get("NEXT_PUBLIC_SUPABASE_SECRET_KEY")) values.set("SUPABASE_SECRET_KEY", values.get("NEXT_PUBLIC_SUPABASE_SECRET_KEY"));
+values.delete("NEXT_PUBLIC_SUPABASE_SECRET_KEY");
 
 const added = [];
 function setIfEmpty(key, value, generated = false) {
@@ -61,7 +54,7 @@ setIfEmpty("NEXT_PUBLIC_APP_URL", "https://tracecase.vercel.app");
 setIfEmpty("AUTH_SECRET", randomSecret(), true);
 setIfEmpty("AUTH_TRUST_HOST", "true");
 setIfEmpty("TRACECASE_RUNTIME_MODE", "live");
-setIfEmpty("TRACECASE_PERSISTENCE", "mongodb");
+setIfEmpty("TRACECASE_PERSISTENCE", "supabase");
 setIfEmpty("ALLOW_EXTERNAL_CALLS", "true");
 setIfEmpty("AUTO_DISPATCH_RUNS", "true");
 setIfEmpty("TRACECASE_ORGANIZATION_ID", `org_${randomBytes(8).toString("hex")}`, true);
@@ -71,8 +64,6 @@ setIfEmpty("TRACECASE_PROJECT_ID", `project_${randomBytes(8).toString("hex")}`, 
 setIfEmpty("TRACECASE_PROJECT_NAME", "Tracecase");
 setIfEmpty("TRACECASE_PROJECT_SLUG", "tracecase");
 setIfEmpty("TRACECASE_PRIVATE_SELECTORS", "input[type=password],[data-private],[data-tracecase-mask]");
-setIfEmpty("MONGODB_DATABASE", "tracecase");
-setIfEmpty("MONGODB_APPLY_CHANGES", "false");
 setIfEmpty("NEXT_PUBLIC_WIDGET_PROJECT_KEY", randomSecret("pk_"), true);
 setIfEmpty("WIDGET_SIGNING_SECRET", randomSecret(), true);
 setIfEmpty("WORKER_SIGNING_SECRET", randomSecret(), true);
@@ -153,7 +144,9 @@ writeFileSync(targets[0], renderEnvironment(new Map()), { encoding: "utf8", mode
 writeFileSync(targets[1], renderEnvironment(sources[1].extras), { encoding: "utf8", mode: 0o600 });
 
 const unresolved = [
-  "MONGODB_URI",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SECRET_KEY",
   "AUTH_GITHUB_ID",
   "AUTH_GITHUB_SECRET",
   "GITHUB_APP_ID",

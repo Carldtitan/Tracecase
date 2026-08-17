@@ -107,6 +107,27 @@ export class GitHubAdapter extends JsonIntegration {
     return this.github<{ object: { sha: string } }>(token, `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/git/ref/heads/${input.branch.split("/").map(encodeURIComponent).join("/")}`);
   }
 
+  async pullRequestContext(input: { owner: string; repo: string; number: number; installationId: string }) {
+    const token = await this.installationToken(input.installationId);
+    const root = `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}`;
+    const pull = await this.github<{ title: string; body: string | null; base: { sha: string }; head: { sha: string } }>(token, `${root}/pulls/${input.number}`);
+    const changed = await this.github<Array<{ filename: string; status: string; additions: number; deletions: number; patch?: string }>>(token, `${root}/pulls/${input.number}/files?per_page=100`);
+    const files = await Promise.all(changed.filter((file) => file.patch).slice(0, 40).map(async (file) => {
+      try {
+        const source = await this.github<{ type: string; encoding?: string; content?: string; size?: number }>(token, `${root}/contents/${file.filename.split("/").map(encodeURIComponent).join("/")}?ref=${encodeURIComponent(pull.head.sha)}`);
+        const content = source.type === "file" && source.encoding === "base64" && (source.size ?? 0) <= 200_000 && source.content ? Buffer.from(source.content.replace(/\s/g, ""), "base64").toString("utf8") : undefined;
+        return { ...file, content };
+      } catch { return file; }
+    }));
+    return { title: pull.title, body: pull.body ?? "", baseSha: pull.base.sha, headSha: pull.head.sha, files };
+  }
+
+  async submitPullRequestReview(input: { owner: string; repo: string; number: number; installationId: string; commitId: string; body: string; comments: Array<{ path: string; line: number; side: "RIGHT"; body: string }> }) {
+    const token = await this.installationToken(input.installationId);
+    const root = `https://api.github.com/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}`;
+    return this.github<{ id: number; html_url?: string }>(token, `${root}/pulls/${input.number}/reviews`, { method: "POST", body: JSON.stringify({ commit_id: input.commitId, event: "COMMENT", body: input.body, comments: input.comments }) }).then((value) => ({ id: value.id, htmlUrl: value.html_url }));
+  }
+
   async createDraftPullRequestFromFiles(input: {
     owner: string;
     repo: string;

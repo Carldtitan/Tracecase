@@ -1,5 +1,5 @@
 const checks = [
-  { name: "MongoDB", required: ["MONGODB_URI"] },
+  { name: "Supabase", required: ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY"] },
   { name: "Fireworks", required: ["FIREWORKS_API_KEY", "FIREWORKS_MODEL"] },
   { name: "Daytona", required: ["DAYTONA_API_KEY", "DAYTONA_API_URL"] },
   { name: "GitHub sign-in", required: ["AUTH_GITHUB_ID", "AUTH_GITHUB_SECRET", "AUTH_SECRET"] },

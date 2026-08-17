@@ -10,7 +10,7 @@ export default async function RunsPage() {
   try {
     runs = await listRuns(getDefaultScope());
   } catch {
-    return <main className="dashboard-page"><PageHeader eyebrow="Runs" title="Investigations" /><EmptyPanel icon="database" title="Runs unavailable" detail="Connect MongoDB to load investigations." action={{ href: "/app/connections", label: "Check connection" }} /></main>;
+    return <main className="dashboard-page"><PageHeader eyebrow="Runs" title="Investigations" /><EmptyPanel icon="database" title="Runs unavailable" detail="Connect Supabase to load investigations." action={{ href: "/app/connections", label: "Check connection" }} /></main>;
   }
   if (!runs.length) return <main className="dashboard-page"><PageHeader eyebrow="Runs" title="Investigations" /><EmptyPanel icon="activity" title="No runs yet" detail="A complete report starts an investigation." action={{ href: "/app/connections", label: "Check connections" }} /></main>;
   return (

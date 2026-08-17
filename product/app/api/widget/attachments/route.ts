@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       ...scope,
       sessionId,
       kind: "attachment" as const,
-      storagePath: "mongodb://artifact_blobs",
+      storagePath: "supabase://tracecase-artifacts/pending",
       sha256: sha256(content),
       bytes: content.byteLength,
       mimeType,

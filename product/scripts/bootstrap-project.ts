@@ -1,10 +1,10 @@
 import { getConfig, getDefaultScope } from "../lib/tracecase/config";
 import type { Project } from "../lib/tracecase/contracts";
-import { MongoTracecaseStore } from "../lib/tracecase/mongodb";
+import { SupabaseTracecaseStore } from "../lib/tracecase/supabase";
 import { sha256 } from "../lib/tracecase/security";
 
 const config = getConfig();
-if (config.persistence !== "mongodb" || !config.mongodbUri) throw new Error("Set TRACECASE_PERSISTENCE=mongodb and MONGODB_URI first.");
+if (config.persistence !== "supabase" || !config.supabaseUrl || !config.supabaseSecretKey) throw new Error("Set TRACECASE_PERSISTENCE=supabase, NEXT_PUBLIC_SUPABASE_URL, and SUPABASE_SECRET_KEY first.");
 const scope = getDefaultScope();
 const projectKey = process.env.NEXT_PUBLIC_WIDGET_PROJECT_KEY;
 const name = process.env.TRACECASE_PROJECT_NAME;
@@ -37,7 +37,7 @@ const project: Project = {
   updatedAt: now,
 };
 
-const store = await MongoTracecaseStore.connect();
+const store = await SupabaseTracecaseStore.connect();
 try {
   const existing = await store.getProject(scope);
   const existingOrganization = await store.getOrganization(scope.organizationId);

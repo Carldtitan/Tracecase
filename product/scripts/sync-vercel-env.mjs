@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const includeMongo = process.argv.includes("--include-mongodb");
 const source = resolve(process.cwd(), ".env.local");
 const values = new Map();
 for (const line of readFileSync(source, "utf8").split(/\r?\n/)) {
@@ -13,12 +12,12 @@ for (const line of readFileSync(source, "utf8").split(/\r?\n/)) {
 const ignored = new Set([
   "VERCEL_OIDC_TOKEN",
   "VERCEL_GIT_COMMIT_SHA",
-  ...(!includeMongo ? ["MONGODB_URI"] : []),
+  "NEXT_PUBLIC_SUPABASE_SECRET_KEY",
 ]);
 const sensitive = new Set([
   "AUTH_SECRET",
   "AUTH_GITHUB_SECRET",
-  "MONGODB_URI",
+  "SUPABASE_SECRET_KEY",
   "WIDGET_SIGNING_SECRET",
   "WORKER_SIGNING_SECRET",
   "OTEL_INGEST_SECRET",
@@ -53,5 +52,4 @@ for (const [key, value] of values) {
     console.error(`Failed ${key}: ${reason}`);
   }
 }
-if (!includeMongo) console.log("Skipped MONGODB_URI. Rotate its exposed password, update .env.local, then rerun with --include-mongodb.");
 if (failures) process.exitCode = 1;

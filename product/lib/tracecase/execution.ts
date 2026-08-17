@@ -38,8 +38,9 @@ export function liveExecutionConfigured(): boolean {
   return Boolean(
     config.allowExternalCalls &&
     config.runtimeMode === "live" &&
-    config.persistence === "mongodb" &&
-    config.mongodbUri &&
+    config.persistence === "supabase" &&
+    config.supabaseUrl &&
+    config.supabaseSecretKey &&
     config.workerSigningSecret &&
     config.appUrl &&
     process.env.DAYTONA_API_KEY &&

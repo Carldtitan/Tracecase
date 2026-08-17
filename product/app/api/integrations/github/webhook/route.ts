@@ -2,6 +2,10 @@ import { getDefaultScope } from "@/lib/tracecase/config";
 import { json, problem } from "@/lib/tracecase/http";
 import { getRuntime } from "@/lib/tracecase/service";
 import { createOpaqueId, redactUnknown, verifyWebhookSignature } from "@/lib/tracecase/security";
+import { reviewPullRequest, shouldReviewPullRequest } from "@/lib/tracecase/code-review";
+import { after } from "next/server";
+
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +15,8 @@ export async function POST(request: Request) {
     if (!verifyWebhookSignature(body, request.headers.get("x-hub-signature-256"), secret)) return json({ error: "invalid_signature" }, 401);
     const delivery = request.headers.get("x-github-delivery") ?? createOpaqueId("delivery");
     const eventName = request.headers.get("x-github-event") ?? "unknown";
-    const payload = redactUnknown(JSON.parse(body) as Record<string, unknown>);
+    const rawPayload = JSON.parse(body) as Record<string, unknown>;
+    const payload = redactUnknown(rawPayload);
     const { store } = await getRuntime();
     const scope = getDefaultScope();
     const project = await store.getProject(scope);
@@ -32,6 +37,17 @@ export async function POST(request: Request) {
       } : undefined);
       const repository = selected && installation?.id ? { ...selected, installationId: String(installation.id) } : selected;
       await store.putProject({ ...project, repository, connections, updatedAt: new Date().toISOString() });
+    }
+    if (eventName === "pull_request" && shouldReviewPullRequest(rawPayload)) {
+      after(async () => {
+        try {
+          await reviewPullRequest({ store, scope, project, delivery, payload: rawPayload });
+        } catch (error) {
+          console.error("Tracecase automated code review failed.", { delivery, name: error instanceof Error ? error.name : "UnknownError", message: error instanceof Error ? error.message : "Unknown error" });
+        } finally {
+          await store.dispose();
+        }
+      });
     }
     await store.appendAuditEvent({ id: `audit_github_${delivery}`, organizationId: scope.organizationId, projectId: scope.projectId, actorId: "github-app", action: `github.webhook.${eventName}`, target: delivery, result: "changed", details: { delivery, eventName }, timestamp: new Date().toISOString() });
     return json({ accepted: true, delivery, eventName }, 202);

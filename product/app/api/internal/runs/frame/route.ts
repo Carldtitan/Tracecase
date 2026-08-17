@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       runId: token.runId,
       workerId: token.workerId,
       kind: "live-frame",
-      storagePath: `mongodb-artifact://${id}`,
+      storagePath: `supabase://tracecase-artifacts/${id}`,
       sha256: sha256(content),
       bytes: content.byteLength,
       mimeType: jpeg ? "image/jpeg" : "image/png",

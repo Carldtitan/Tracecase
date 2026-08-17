@@ -57,7 +57,7 @@ export async function processRemoteCompletion(dependencies: CompletionDependenci
         projectId: state.run.projectId,
         runId: state.run.id,
         kind: item.kind,
-        storagePath: `mongodb-artifact://${id}`,
+        storagePath: `supabase://tracecase-artifacts/${id}`,
         sha256: sha256(content),
         bytes: content.byteLength,
         mimeType: item.mimeType,

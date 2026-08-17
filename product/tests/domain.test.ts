@@ -3,7 +3,6 @@ import { test } from "node:test";
 import { getConfig, IntegrationDisabledError } from "../lib/tracecase/config";
 import { fixtureProject, fixtureScope, fixtureUser } from "./fixtures";
 import { FireworksReasoningModel } from "../lib/tracecase/integrations";
-import { mongoCollectionPlans } from "../lib/tracecase/mongodb";
 import { classifyContext, planEnvironments, shouldContinueInvestigation } from "../lib/tracecase/planner";
 import { extractExactIdentifiers } from "../lib/tracecase/retrieval";
 import { authorizeProject, filterRepositoryContent, isPromptInjection, redactUnknown, signToken, verifyToken } from "../lib/tracecase/security";
@@ -16,26 +15,13 @@ import sharp from "sharp";
 test("empty environment selects production adapters but keeps external calls closed", () => {
   const config = getConfig({} as NodeJS.ProcessEnv);
   assert.equal(config.runtimeMode, "live");
-  assert.equal(config.persistence, "mongodb");
+  assert.equal(config.persistence, "supabase");
   assert.equal(config.allowExternalCalls, false);
-  assert.equal(config.applyMongoChanges, false);
 });
 
 test("external model cannot run in fixture mode", async () => {
   const model = new FireworksReasoningModel();
   await assert.rejects(() => model.plan({ report: "x", context: [] }), IntegrationDisabledError);
-});
-
-test("every operational collection has a scoped index", () => {
-  for (const plan of mongoCollectionPlans) {
-    if (plan.name === "organizations") {
-      assert.ok(plan.indexes.some((index) => index.name === "organization_id"));
-      continue;
-    }
-    const tenantIndex = plan.indexes.find((index) => index.key && "organizationId" in index.key);
-    assert.ok(tenantIndex, `${plan.name} needs an organization-scoped index`);
-  }
-  assert.ok(mongoCollectionPlans.find((plan) => plan.name === "run_checkpoints")?.indexes.some((index) => index.name === "tenant_idempotency"));
 });
 
 test("redaction removes credentials and sensitive headers recursively", () => {
