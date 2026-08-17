@@ -60,8 +60,8 @@ async function cleanupSecrets() {
 }
 
 function fireworksFallback(name) {
-  modelUnavailable = true;
   if (name === "tracecase_investigation_plan") {
+    modelUnavailable = true;
     const isDomainSdr = isDomainSdrTarget();
     return {
       hypotheses: ["The reported action may fail only under a specific browser, device, or session state."],
@@ -91,29 +91,41 @@ function fireworksFallback(name) {
 }
 
 async function fireworks(messages, name, schema) {
+  const task = name === "tracecase_visual_evidence"
+    ? { maxTokens: 2_048, timeoutMs: 55_000, retries: 1, reasoningEffort: "none" }
+    : name === "tracecase_investigation_plan"
+      ? { maxTokens: 6_000, timeoutMs: 90_000, retries: 0, reasoningEffort: "low" }
+      : { maxTokens: 12_000, timeoutMs: 110_000, retries: 0, reasoningEffort: "low" };
   let response;
-  try {
-    response = await fetch(`${process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1"}/chat/completions`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${process.env.FIREWORKS_API_KEY}`, "content-type": "application/json" },
-    signal: AbortSignal.timeout(100_000),
-    body: JSON.stringify({
-      model: process.env.FIREWORKS_MODEL,
-      temperature: 0,
-      max_tokens: 12_000,
-      response_format: { type: "json_schema", json_schema: { name, schema } },
-      messages,
-    }),
-    });
-  } catch (error) {
-    const fallback = fireworksFallback(name);
-    if (fallback) return fallback;
-    throw new Error(`Fireworks request failed: ${redact(error instanceof Error ? error.message : error, 500)}`);
+  let lastError;
+  for (let attempt = 0; attempt <= task.retries; attempt += 1) {
+    try {
+      response = await fetch(`${process.env.FIREWORKS_BASE_URL ?? "https://api.fireworks.ai/inference/v1"}/chat/completions`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${process.env.FIREWORKS_API_KEY}`, "content-type": "application/json" },
+        signal: AbortSignal.timeout(task.timeoutMs),
+        body: JSON.stringify({
+          model: process.env.FIREWORKS_MODEL,
+          temperature: 0,
+          max_tokens: task.maxTokens,
+          reasoning_effort: task.reasoningEffort,
+          response_format: { type: "json_schema", json_schema: { name, schema } },
+          messages,
+        }),
+      });
+      if (response.ok) break;
+      lastError = new Error(`Fireworks returned ${response.status}`);
+      if (![408, 409, 425, 429, 500, 502, 503, 504].includes(response.status) || attempt === task.retries) break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === task.retries) break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250 * 2 ** attempt));
   }
-  if (!response.ok) {
+  if (!response?.ok) {
     const fallback = fireworksFallback(name);
     if (fallback) return fallback;
-    throw new Error(`Fireworks returned ${response.status}: ${redact(await response.text(), 1000)}`);
+    throw new Error(`Fireworks request failed: ${redact(lastError instanceof Error ? lastError.message : lastError, 500)}`);
   }
   const payload = await response.json();
   const content = payload.choices?.[0]?.message?.content;
@@ -463,9 +475,23 @@ try {
 
   const workerOutputs = await Promise.all(job.environments.map((environment, index) => runBrowserWorker(environment, index, plan.browserPlan)));
   const workerResults = workerOutputs.map((item) => item.result);
-  const visualInputs = [...workerOutputs.filter((item) => item.result.status === "failed"), ...workerOutputs.filter((item) => item.result.status !== "failed")]
-    .flatMap((item) => (item.artifacts ?? []).filter((artifact) => artifact.kind === "screenshot").slice(0, 1).map((artifact) => ({ workerId: item.result.workerId, environment: item.result.environment, artifact })))
-    .slice(0, 4);
+  const screenshotCandidates = workerOutputs
+    .flatMap((item) => (item.artifacts ?? []).filter((artifact) => artifact.kind === "screenshot").slice(0, 1).map((artifact) => ({ workerId: item.result.workerId, environment: item.result.environment, failed: item.result.status === "failed", artifact })));
+  const seenScreenshots = new Set();
+  const uniqueScreenshots = screenshotCandidates.filter((item) => {
+    const digest = sha256(item.artifact.contentBase64);
+    if (seenScreenshots.has(digest)) return false;
+    seenScreenshots.add(digest);
+    return true;
+  });
+  const visualInputs = [
+    ...uniqueScreenshots.filter((item) => item.failed).slice(0, 2),
+    ...uniqueScreenshots.filter((item) => !item.failed).slice(0, 1),
+  ];
+  for (const item of uniqueScreenshots) {
+    if (visualInputs.length >= 3) break;
+    if (!visualInputs.includes(item)) visualInputs.push(item);
+  }
   for (const attachment of (job.reporterAttachments ?? []).slice(0, Math.max(0, 4 - visualInputs.length))) {
     visualInputs.push({ workerId: `reporter:${attachment.id}`, environment: { source: "reported", note: "Reporter-provided screenshot with metadata removed" }, artifact: { mimeType: attachment.mimeType, contentBase64: attachment.contentBase64 } });
   }

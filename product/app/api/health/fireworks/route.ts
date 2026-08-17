@@ -43,6 +43,7 @@ export async function POST(request: Request) {
         ],
       }],
       maxTokens: 512,
+      reasoningEffort: "none",
       timeoutMs: 10_000,
       retries: 1,
     });

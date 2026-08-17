@@ -58,6 +58,7 @@ export async function requestFireworksChat(options: {
   model?: string;
   maxTokens?: number;
   temperature?: number;
+  reasoningEffort?: "none" | "low" | "medium" | "high";
   responseFormat?: Record<string, unknown>;
   timeoutMs?: number;
   retries?: number;
@@ -83,6 +84,7 @@ export async function requestFireworksChat(options: {
           messages: options.messages,
           temperature: options.temperature ?? 0,
           max_tokens: options.maxTokens ?? 512,
+          ...(options.reasoningEffort ? { reasoning_effort: options.reasoningEffort } : {}),
           ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
         }),
       });

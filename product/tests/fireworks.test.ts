@@ -45,12 +45,14 @@ test("Fireworks vision retries a transient response and uses the vision model", 
     vision: true,
     messages: [{ role: "user", content: [{ type: "text", text: "Inspect" }, { type: "image_url", image_url: { url: "data:image/png;base64,AA==" } }] }],
     retries: 1,
+    reasoningEffort: "none",
     retryDelayMs: 0,
     fetchImpl,
   });
   assert.equal(content, "Image accepted");
   assert.equal(calls, 2);
   assert.equal(requests[1].model, "accounts/fireworks/models/kimi-k2p6");
+  assert.equal(requests[1].reasoning_effort, "none");
 });
 
 test("Fireworks errors expose status but never provider response bodies", async () => {
