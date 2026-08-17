@@ -51,7 +51,7 @@ For local UI inspection without GitHub credentials, start the development server
 
 1. Open [MongoDB Atlas](https://cloud.mongodb.com/) and create or select the hackathon project and cluster.
 2. Create a database user with read/write access to the `tracecase` database.
-3. Add the deployment’s network access. Atlas accepts connections only from its IP access list and requires a database user. For a short-lived hackathon deployment, an allow-from-anywhere entry plus a strong database-only password is the practical Vercel setup; replace it with restricted networking after the event. See [Atlas connection troubleshooting](https://www.mongodb.com/docs/atlas/troubleshoot-connection/) and [connection strings](https://www.mongodb.com/docs/manual/reference/connection-string/).
+3. Add the deployment’s network access. Atlas accepts connections only from its IP access list and requires a database user. Vercel uses dynamic outbound addresses unless the project has a static-egress option. For a short-lived hackathon deployment, add `0.0.0.0/0` in **Security → Network Access** and protect the database with a strong, database-only user; replace this with restricted networking after the event. A repeated `MongoServerSelectionError` with `ETIMEDOUT` on port `27017` usually means this access-list step is missing. See [Atlas connection troubleshooting](https://www.mongodb.com/docs/atlas/troubleshoot-connection/) and [connection strings](https://www.mongodb.com/docs/manual/reference/connection-string/).
 4. Select **Connect → Drivers → Node.js**. Copy the `mongodb+srv://…` URI, replace the password, and set `MONGODB_URI`.
 5. Keep `MONGODB_DATABASE=tracecase`.
 6. Locally, run:
